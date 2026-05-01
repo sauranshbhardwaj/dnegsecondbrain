@@ -82,6 +82,19 @@ Goal: feed complete hand history into Claude and receive coaching that sounds li
 - Make a secondary lightweight mistake-extraction call.
 - Store new or repeated mistake patterns.
 
+## Build Memory
+
+### 2026-05-01 - Day 1 Poker Engine Complete
+
+- Added the DN persona foundation in `CLAUDE.md`, including voice, strategy, teaching style, mistake memory, era awareness, and the approved warm deflection for AI/authenticity questions.
+- Added first curated wiki context files: `wiki/small-ball-poker.md` and `wiki/mental-game.md`.
+- Built the FastAPI poker engine in `services/poker-engine/` with in-memory sessions keyed by `userId`.
+- Implemented deck management, blind posting, heads-up state progression, betting validation, all-in handling, fold settlement, and `treys` showdown evaluation.
+- Added a rule-based DN bot with bounded randomized preflop, postflop, and river behavior.
+- Exposed `POST /game/new`, `POST /game/action`, `GET /game/state`, and `POST /game/showdown`.
+- Verified with `pytest`: 16 passing tests across deck logic, engine behavior, API endpoints, and showdown outcomes.
+- Verified manually over localhost HTTP by playing a complete hand through new/action/showdown and confirming pot award plus revealed showdown hands.
+
 ## Day 3 - Persistence and Auth
 
 Goal: users have separate persistent mistake profiles and working rate limits.
