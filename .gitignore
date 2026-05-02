@@ -2,8 +2,10 @@
 __pycache__/
 .pytest_cache/
 .venv/
+.env
 *.py[cod]
 *.egg-info/
 .env
 .env.local
 *.env
+node_modules/
