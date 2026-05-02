@@ -9,3 +9,5 @@ dist/
 .env.local
 *.env
 node_modules/
+services/frontend/.next/
+services/frontend/node_modules/
