@@ -3,9 +3,9 @@ __pycache__/
 .pytest_cache/
 .venv/
 .env
+dist/
 *.py[cod]
 *.egg-info/
-.env
 .env.local
 *.env
 node_modules/
