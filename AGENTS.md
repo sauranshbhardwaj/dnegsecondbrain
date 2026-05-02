@@ -436,3 +436,11 @@ For SIG specifically: emphasize the GTO vs exploitative framework, the EV-based 
 4. `CLAUDE_DN_SECONDBRAIN.md` — this roadmap document, kept in the repo root for LLM context
 
 The CLAUDE.md and first 3 wiki articles should exist before a single line of application code is written. They are the foundation everything else is built on.
+
+## Day 4 — Frontend Stack
+- Framework: Next.js App Router, TypeScript, Tailwind CSS
+- Auth UI: Clerk components
+- Styling: Tailwind + custom CSS variables for the design system
+- No component libraries (no shadcn, no MUI) — build from scratch
+- Design brief lives in DESIGN_BRIEF.md — read it before writing any component
+- Skills to use: vercel-react-best-practices, web-design-guidelines, impeccable
