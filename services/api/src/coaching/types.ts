@@ -22,6 +22,7 @@ export type MistakeProfileEntry = {
 };
 
 export type CoachingAnalyzeRequest = {
+  handId?: string;
   userId: string;
   handHistory: HandHistoryEntry[];
   userHand: [string, string];

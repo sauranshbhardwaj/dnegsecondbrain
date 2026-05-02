@@ -1,6 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 import type { Env } from "../config/env.js";
+import type { EncryptedApiKey } from "../security/api-key-crypto.js";
+import { decryptApiKey } from "../security/api-key-crypto.js";
 
 export type ClaudeMessage = {
   systemPrompt: string;
@@ -18,12 +20,12 @@ export class AnthropicClaudeClient implements ClaudeClient {
   private readonly model: string;
   private readonly maxTokens: number;
 
-  constructor(env: Env) {
-    if (!env.anthropicApiKey) {
+  constructor(env: Env, apiKey = env.anthropicApiKey) {
+    if (!apiKey) {
       throw new Error("ANTHROPIC_API_KEY is required for Claude calls");
     }
 
-    this.client = new Anthropic({ apiKey: env.anthropicApiKey });
+    this.client = new Anthropic({ apiKey });
     this.model = env.claudeModel;
     this.maxTokens = env.claudeMaxTokens;
   }
@@ -69,9 +71,13 @@ export class MissingClaudeClient implements ClaudeClient {
   }
 }
 
-export function createClaudeClient(env: Env): ClaudeClient {
-  if (!env.anthropicApiKey) {
+export function createClaudeClient(env: Env, apiKey = env.anthropicApiKey): ClaudeClient {
+  if (!apiKey) {
     return new MissingClaudeClient();
   }
-  return new AnthropicClaudeClient(env);
+  return new AnthropicClaudeClient(env, apiKey);
+}
+
+export function createClaudeClientFromEncryptedApiKey(env: Env, encryptedApiKey: EncryptedApiKey): ClaudeClient {
+  return createClaudeClient(env, decryptApiKey(encryptedApiKey, env.apiKeyEncryptionSecret));
 }

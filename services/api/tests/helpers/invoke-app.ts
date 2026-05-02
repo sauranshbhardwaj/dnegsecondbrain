@@ -21,16 +21,41 @@ export async function invokeApp(app: Express, options: InvokeOptions) {
   const res = httpMocks.createResponse({ eventEmitter: EventEmitter });
 
   await new Promise<void>((resolve, reject) => {
-    const done = () => resolve();
-    res.on("end", done);
-    res.on("finish", done);
-    res.on("error", reject);
-    app.handle(req, res);
-    setImmediate(() => {
-      if (res._isEndCalled()) {
-        resolve();
+    let interval: ReturnType<typeof setInterval>;
+    let timeout: ReturnType<typeof setTimeout>;
+    let settled = false;
+    const cleanup = () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+    const finish = () => {
+      if (settled) {
+        return;
       }
-    });
+      settled = true;
+      cleanup();
+      resolve();
+    };
+    const fail = (error: Error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      reject(error);
+    };
+    timeout = setTimeout(() => {
+      fail(new Error(`Timed out waiting for app response: status=${res.statusCode} data=${res._getData()}`));
+    }, 2000);
+    interval = setInterval(() => {
+      if (res._isEndCalled()) {
+        finish();
+      }
+    }, 5);
+    res.on("end", finish);
+    res.on("finish", finish);
+    res.on("error", fail);
+    app.handle(req, res);
   });
 
   return {

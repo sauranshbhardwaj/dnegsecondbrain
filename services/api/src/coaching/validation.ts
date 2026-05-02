@@ -22,6 +22,7 @@ export const mistakeProfileEntrySchema = z.object({
 });
 
 export const coachingAnalyzeRequestSchema = z.object({
+  handId: z.string().min(1).optional(),
   userId: z.string().min(1),
   handHistory: z.array(handHistoryEntrySchema).min(1),
   userHand: z.tuple([cardSchema, cardSchema]),

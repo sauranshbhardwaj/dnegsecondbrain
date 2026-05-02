@@ -1,11 +1,12 @@
 import type { ClaudeClient } from "../claude/client.js";
 import type { MistakeExtractor } from "./extractor.js";
 import { buildPromptBundle } from "./prompt.js";
-import type { CoachingAnalyzeRequest, CoachingStreamEvent } from "./types.js";
+import type { CoachingAnalyzeRequest, CoachingStreamEvent, MistakeExtraction } from "./types.js";
 
 export type AnalyzeDeps = {
   claudeClient: ClaudeClient;
   mistakeExtractor: MistakeExtractor;
+  onMistake?: (mistake: MistakeExtraction) => Promise<void> | void;
 };
 
 export async function analyzeHand(
@@ -25,6 +26,7 @@ export async function analyzeHand(
   }
 
   const mistake = await deps.mistakeExtractor.extract(fullText, request);
+  await deps.onMistake?.(mistake);
   onEvent("mistake", { type: "mistake", mistake });
   onEvent("done", {
     type: "done",
