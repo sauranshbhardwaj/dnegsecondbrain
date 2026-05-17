@@ -5,7 +5,7 @@ from app.bot import DNBot
 from app.constants import BIG_BLIND, DN, SMALL_BLIND, STARTING_STACK, USER
 from app.deck import assert_unique_cards, burn, deal, shuffled_deck
 from app.evaluator import evaluate_showdown
-from app.models import GamePhase, GameState, HandHistoryEntry, PlayerAction, ShowdownResult
+from app.models import GamePhase, GameState, HandHistoryEntry, PlayerAction, ShowdownResult, TerminalHand
 
 
 ACTIVE_PHASES = {GamePhase.PREFLOP, GamePhase.FLOP, GamePhase.TURN, GamePhase.RIVER}
@@ -113,6 +113,16 @@ class GameService:
             "userHand": list(state.userHand),
             "dnHand": list(state.dnHand),
         }
+        state.terminal = TerminalHand(
+            reason="showdown",
+            winner=result["winner"],  # type: ignore[arg-type]
+            potAwarded=awards,
+            userHand=list(state.userHand),
+            dnHand=list(state.dnHand),
+            board=list(state.board),
+            userRank=result["userRank"],  # type: ignore[arg-type]
+            dnRank=result["dnRank"],  # type: ignore[arg-type]
+        )
         state.handHistory.append(
             HandHistoryEntry(
                 actor="system",
@@ -128,7 +138,7 @@ class GameService:
 
     def public_state(self, state: GameState) -> GameState:
         data = state.model_dump()
-        if not (state.state == GamePhase.COMPLETE and state.showdown):
+        if not (state.state == GamePhase.COMPLETE and state.terminal):
             data["dnHand"] = ["hidden", "hidden"]
         return GameState(**data)
 
@@ -191,10 +201,14 @@ class GameService:
             raise ValueError("Cannot fold when facing no bet")
         winner = self._opponent(actor)
         pot = state.pot
+        awards = {"user": 0, "dn": 0}
         if winner == USER:
+            awards["user"] = pot
             state.userStack += pot
         else:
+            awards["dn"] = pot
             state.dnStack += pot
+        self._deal_remaining_board(state)
         state.pot = 0
         state.userBet = 0
         state.dnBet = 0
@@ -204,6 +218,14 @@ class GameService:
         state.actionOn = None
         state.winner = winner  # type: ignore[assignment]
         state.lastAction = f"{actor}_fold"
+        state.terminal = TerminalHand(
+            reason="fold",
+            winner=winner,  # type: ignore[arg-type]
+            potAwarded=awards,
+            userHand=list(state.userHand),
+            dnHand=list(state.dnHand),
+            board=list(state.board),
+        )
         self._record(state, actor, "fold", 0, note or f"{winner} wins by fold")
 
     def _call_or_check(self, state: GameState, actor: str, note: str | None) -> None:

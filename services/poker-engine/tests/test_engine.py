@@ -60,10 +60,11 @@ def test_calling_blind_advances_to_flop() -> None:
     assert state.actionOn == USER
 
 
-def test_fold_awards_pot_without_revealing_dn_hand() -> None:
+def test_fold_awards_pot_with_terminal_context() -> None:
     service = GameService(random.Random(4), auto_play_dn=False)
     service.new_game("user_1")
     state = service.sessions["user_1"]
+    internal_dn_hand = list(state.dnHand)
 
     service._apply_action(state, DN, PlayerAction.RAISE, 100)
     public = service.apply_user_action("user_1", PlayerAction.FOLD)
@@ -73,7 +74,14 @@ def test_fold_awards_pot_without_revealing_dn_hand() -> None:
     assert public.pot == 0
     assert public.userStack == 950
     assert public.dnStack == 1050
-    assert public.dnHand == ["hidden", "hidden"]
+    assert public.dnHand == internal_dn_hand
+    assert public.terminal is not None
+    assert public.terminal.reason == "fold"
+    assert public.terminal.winner == DN
+    assert public.terminal.potAwarded == {"user": 0, "dn": 150}
+    assert public.terminal.userHand == public.userHand
+    assert public.terminal.dnHand == internal_dn_hand
+    assert len(public.terminal.board) == 5
     assert public.userStack + public.dnStack + public.pot == STARTING_STACK * 2
 
 
@@ -110,6 +118,12 @@ def test_showdown_awards_winning_hand() -> None:
     assert result.gameState.dnStack == 750
     assert result.gameState.pot == 0
     assert result.gameState.dnHand == ["Kc", "Kd"]
+    assert result.gameState.terminal is not None
+    assert result.gameState.terminal.reason == "showdown"
+    assert result.gameState.terminal.winner == USER
+    assert result.gameState.terminal.potAwarded == {"user": 500, "dn": 0}
+    assert result.gameState.terminal.userRank == result.userRank
+    assert result.gameState.terminal.dnRank == result.dnRank
 
 
 def test_showdown_splits_tied_board() -> None:

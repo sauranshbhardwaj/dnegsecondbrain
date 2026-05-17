@@ -44,6 +44,17 @@ class HandHistoryEntry(BaseModel):
     note: str | None = None
 
 
+class TerminalHand(BaseModel):
+    reason: Literal["fold", "showdown"]
+    winner: Literal["user", "dn", "split"]
+    potAwarded: dict[Literal["user", "dn"], int]
+    userHand: list[str]
+    dnHand: list[str]
+    board: list[str]
+    userRank: str | None = None
+    dnRank: str | None = None
+
+
 class GameState(BaseModel):
     handId: str
     userId: str
@@ -70,6 +81,7 @@ class GameState(BaseModel):
     actedThisStreet: list[str] = Field(default_factory=list)
     winner: Literal["user", "dn", "split"] | None = None
     showdown: dict[str, Any] | None = None
+    terminal: TerminalHand | None = None
 
 
 class ShowdownResult(BaseModel):

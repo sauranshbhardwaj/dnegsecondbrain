@@ -232,6 +232,87 @@ describe("Day 3 protected routes", () => {
     expect(deleteResponse.body).toEqual({ hasApiKey: false });
     expect(await repository.getEncryptedApiKey("clerk_user_123")).toBeNull();
   });
+
+  it("returns profile data without API key material", async () => {
+    const repository = new InMemoryRepository();
+    repository.freeHandCounts.set("clerk_user_123", 3);
+    await repository.setMistakes("clerk_user_123", [
+      {
+        pattern: "over-folding to pressure",
+        firstSeen: "2026-05-01T10:00:00.000Z",
+        lastSeen: "2026-05-01T11:00:00.000Z",
+        frequency: 2,
+        severity: "medium",
+        handsContext: ["hand_1"]
+      }
+    ]);
+    await repository.setEncryptedApiKey(
+      "clerk_user_123",
+      encryptApiKey("sk-ant-user-owned-key", env.apiKeyEncryptionSecret)
+    );
+
+    const response = await invokeApp(
+      createApp({
+        env,
+        repository,
+        auth: createStaticAuthHandlers("clerk_user_123")
+      }),
+      {
+        method: "GET",
+        url: "/user/profile"
+      }
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      mistakes: [
+        {
+          pattern: "over-folding to pressure",
+          firstSeen: "2026-05-01T10:00:00.000Z",
+          lastSeen: "2026-05-01T11:00:00.000Z",
+          frequency: 2,
+          severity: "medium",
+          handsContext: ["hand_1"]
+        }
+      ],
+      freeHandsUsed: 3,
+      freeHandsLimit: 5,
+      hasApiKey: true
+    });
+    expect(response.text).not.toContain("sk-ant-user-owned-key");
+  });
+
+  it("stores session eval ratings for the authenticated user", async () => {
+    const repository = new InMemoryRepository();
+
+    const response = await invokeApp(
+      createApp({
+        env,
+        repository,
+        auth: createStaticAuthHandlers("clerk_user_123")
+      }),
+      {
+        method: "POST",
+        url: "/user/eval",
+        body: {
+          rating: 5,
+          feedback: "Warm, direct, and specific.",
+          sessionId: "session_abc"
+        }
+      }
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ ok: true });
+    expect([...repository.evals.values()]).toEqual([
+      expect.objectContaining({
+        userId: "clerk_user_123",
+        rating: 5,
+        feedback: "Warm, direct, and specific.",
+        sessionId: "session_abc"
+      })
+    ]);
+  });
 });
 
 function parseSseEvents(text: string): Array<{ event: string; data: unknown }> {

@@ -1,5 +1,5 @@
 import type { MistakeExtraction, MistakeProfileEntry } from "../../src/coaching/types.js";
-import type { PersistenceRepository } from "../../src/persistence/repository.js";
+import type { PersistenceRepository, SessionEval } from "../../src/persistence/repository.js";
 import { upsertMistakeProfile } from "../../src/persistence/mistakes.js";
 import type { EncryptedApiKey } from "../../src/security/api-key-crypto.js";
 
@@ -8,6 +8,7 @@ export class InMemoryRepository implements PersistenceRepository {
   mistakes = new Map<string, MistakeProfileEntry[]>();
   freeHandCounts = new Map<string, number>();
   apiKeys = new Map<string, EncryptedApiKey>();
+  evals = new Map<string, SessionEval>();
   nowIso = "2026-05-02T00:00:00.000Z";
 
   async getCurrentSession<T = unknown>(userId: string): Promise<T | null> {
@@ -60,5 +61,9 @@ export class InMemoryRepository implements PersistenceRepository {
 
   async hasEncryptedApiKey(userId: string): Promise<boolean> {
     return this.apiKeys.has(userId);
+  }
+
+  async setSessionEval(userId: string, createdAt: string, evaluation: SessionEval): Promise<void> {
+    this.evals.set(`eval:${userId}:${createdAt}`, evaluation);
   }
 }
