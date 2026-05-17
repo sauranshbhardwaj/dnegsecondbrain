@@ -51,7 +51,7 @@ Analyze this hand in your voice. Cover:
 3. If this matches any pattern from their mistake history, call it out directly
 4. One concrete takeaway they can apply immediately
 
-Keep it under 200 words. Sound like yourself -- direct, warm, a little funny, always teaching.`;
+Keep the response under 120 words. Be direct and specific. One observation about your own play, one clear mistake the user made, one concrete fix. No more than 3 short paragraphs.`;
 }
 
 export function summarizeMistakeProfile(profile: MistakeProfileEntry[]): string {

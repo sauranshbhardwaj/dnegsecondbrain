@@ -3,6 +3,8 @@ import express from "express";
 import { z } from "zod";
 
 import { getAuthenticatedUserId } from "../../auth/clerk.js";
+import { inferMistakeFromHand } from "../../coaching/mistake-extraction.js";
+import { coachingAnalyzeRequestSchema } from "../../coaching/validation.js";
 import type { Env } from "../../config/env.js";
 import type { PersistenceRepository } from "../../persistence/repository.js";
 import { FREE_HAND_LIMIT } from "../../rate-limit/free-hands.js";
@@ -18,12 +20,6 @@ const apiKeyRequestSchema = z.union([
     apiKey: z.never().optional()
   })
 ]);
-
-const evalRequestSchema = z.object({
-  rating: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
-  feedback: z.string().trim().max(1000).optional(),
-  sessionId: z.string().trim().min(1).max(200).optional()
-});
 
 export type UserApiKeyRouteDeps = {
   repository: PersistenceRepository;
@@ -92,11 +88,11 @@ export function createUserApiKeyRouter(deps: UserApiKeyRouteDeps): Router {
     }
   });
 
-  router.post("/eval", deps.requireAuth, async (req: Request, res: Response) => {
-    const parsed = evalRequestSchema.safeParse(req.body);
+  router.post("/mistake/infer", deps.requireAuth, async (req: Request, res: Response) => {
+    const parsed = coachingAnalyzeRequestSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
-        error: "Invalid eval request",
+        error: "Invalid mistake inference request",
         issues: parsed.error.issues.map((issue) => ({
           path: issue.path.join("."),
           message: issue.message
@@ -107,19 +103,21 @@ export function createUserApiKeyRouter(deps: UserApiKeyRouteDeps): Router {
 
     try {
       const userId = getAuthenticatedUserId(req);
-      const createdAt = new Date().toISOString();
-      await deps.repository.setSessionEval(userId, createdAt, {
+      const existingMistakes = await deps.repository.getMistakes(userId);
+      const requestWithAuthUser = {
+        ...parsed.data,
         userId,
-        rating: parsed.data.rating,
-        ...(parsed.data.feedback ? { feedback: parsed.data.feedback } : {}),
-        ...(parsed.data.sessionId ? { sessionId: parsed.data.sessionId } : {}),
-        createdAt
-      });
+        userMistakeProfile: existingMistakes
+      };
+      const mistake = inferMistakeFromHand(requestWithAuthUser);
+      const mistakes = mistake.exists
+        ? await deps.repository.upsertMistake(userId, mistake, requestWithAuthUser.handId)
+        : existingMistakes;
 
-      res.json({ ok: true });
+      res.json({ mistake, mistakes });
     } catch (error) {
       res.status(500).json({
-        error: "Eval storage failed",
+        error: "Mistake inference failed",
         message: errorMessage(error)
       });
     }

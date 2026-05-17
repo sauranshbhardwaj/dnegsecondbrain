@@ -11,7 +11,7 @@ describe("prompt construction", () => {
     expect(prompt).toContain("Same suit hole cards are suited, not offsuit.");
     expect(prompt).toContain("The user held [Ah (ace of hearts), Jd (jack of diamonds)]");
     expect(prompt).toContain("Authoritative showdown evaluation: user made One Pair; you made Three of a Kind");
-    expect(prompt).toContain("Keep it under 200 words");
+    expect(prompt).toContain("Keep the response under 120 words");
     expect(prompt).toContain("One concrete takeaway");
   });
 

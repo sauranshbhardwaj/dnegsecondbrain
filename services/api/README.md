@@ -33,12 +33,9 @@ Protected routes:
 - `POST /coaching/analyze`: requires Clerk auth, uses Clerk `userId`, reads permanent mistakes, applies the 5-hand free limit, streams coaching over SSE, then persists extracted mistakes.
 - `GET /user/profile`: requires Clerk auth, returns mistake profile, free-hand usage, free-hand limit, and whether a user Anthropic key is connected.
 - `POST /user/apikey`: requires Clerk auth. Send `{ "apiKey": "sk-ant-..." }` to store an encrypted user Anthropic key, or `{ "delete": true }` to remove it. The API never returns plaintext or encrypted key material.
-- `POST /user/eval`: requires Clerk auth. Send `{ "rating": 1-5, "feedback": "optional", "sessionId": "optional" }` to store Daniel Negreanu fidelity feedback.
-
 Redis keys:
 
 - `session:{userId}:current`
 - `mistakes:{userId}`
 - `ratelimit:{userId}:hands`
 - `apikey:{userId}`
-- `eval:{userId}:{timestamp}`

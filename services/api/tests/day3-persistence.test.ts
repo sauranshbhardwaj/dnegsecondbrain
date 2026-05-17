@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { type MistakeExtraction, type MistakeProfileEntry } from "../src/coaching/types.js";
-import { sessionKey, mistakesKey, rateLimitHandsKey, apiKeyKey, evalKey } from "../src/persistence/keys.js";
+import { sessionKey, mistakesKey, rateLimitHandsKey, apiKeyKey } from "../src/persistence/keys.js";
 import { normalizePattern, upsertMistakeProfile } from "../src/persistence/mistakes.js";
 import { checkAndIncrementFreeHandLimit } from "../src/rate-limit/free-hands.js";
 import { decryptApiKey, encryptApiKey } from "../src/security/api-key-crypto.js";
@@ -15,7 +15,6 @@ describe("Day 3 persistence helpers", () => {
     expect(mistakesKey("user_123")).toBe("mistakes:user_123");
     expect(rateLimitHandsKey("user_123")).toBe("ratelimit:user_123:hands");
     expect(apiKeyKey("user_123")).toBe("apikey:user_123");
-    expect(evalKey("user_123", "2026-05-02T00:00:00.000Z")).toBe("eval:user_123:2026-05-02T00:00:00.000Z");
   });
 
   it("normalizes and merges mistake profile entries permanently", () => {

@@ -13,7 +13,3 @@ export function rateLimitHandsKey(userId: string): string {
 export function apiKeyKey(userId: string): string {
   return `apikey:${userId}`;
 }
-
-export function evalKey(userId: string, timestamp: string): string {
-  return `eval:${userId}:${timestamp}`;
-}

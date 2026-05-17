@@ -8,9 +8,12 @@ export async function POST(request: Request) {
 
   const body = await readJsonBody(request);
 
-  return proxyJsonResponse(nodeApiUrl("/user/eval"), {
+  return proxyJsonResponse(nodeApiUrl("/user/mistake/infer"), {
     method: "POST",
     headers: nodeApiAuthHeaders(auth),
-    body: JSON.stringify(body)
+    body: JSON.stringify({
+      ...body,
+      userId: auth.userId
+    })
   });
 }

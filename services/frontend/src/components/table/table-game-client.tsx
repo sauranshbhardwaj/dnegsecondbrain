@@ -1,18 +1,26 @@
 "use client";
 
+import { useClerk } from "@clerk/nextjs";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { GlossaryText } from "@/components/glossary-text";
 import { formatChips, toDisplayCard } from "@/lib/cards";
 import { buildCoachingPayload, callAmount, getRaiseBounds, hasCompleteTerminalContext, isActiveHand, isUserTurn, nextActionLabel, terminalPotAwarded } from "@/lib/game-helpers";
-import type { CoachingStreamEvent, GameState, MistakeExtraction, PlayerAction, ShowdownResult, UserProfile } from "@/lib/game-types";
+import type { CoachingStreamEvent, GameState, HandHistoryEntry, MistakeExtraction, PlayerAction, ShowdownResult, UserProfile } from "@/lib/game-types";
 import { parseSseMessages } from "@/lib/sse";
 
 const BOARD_SLOTS = Array.from({ length: 5 }, (_, index) => index);
 const FREE_HANDS_FALLBACK = 5;
 
+type NegreanuActionNotice = {
+  detail: string;
+  key: string;
+  text: string;
+};
+
 export function TableGameClient() {
+  const { signOut } = useClerk();
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [raiseAmount, setRaiseAmount] = useState(0);
@@ -26,16 +34,20 @@ export function TableGameClient() {
   const [coachingMistake, setCoachingMistake] = useState<MistakeExtraction | null>(null);
   const [pastPatternMatch, setPastPatternMatch] = useState<string | null>(null);
   const [showRateLimitModal, setShowRateLimitModal] = useState(false);
-  const [showEvalModal, setShowEvalModal] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [isSavingApiKey, setIsSavingApiKey] = useState(false);
   const [apiKeyError, setApiKeyError] = useState<string | null>(null);
-  const [evalRating, setEvalRating] = useState<1 | 2 | 3 | 4 | 5 | null>(null);
-  const [evalFeedback, setEvalFeedback] = useState("");
-  const [isSubmittingEval, setIsSubmittingEval] = useState(false);
-  const [evalSubmitted, setEvalSubmitted] = useState(false);
+  const [isLeavingTable, setIsLeavingTable] = useState(false);
+  const [showCoachingScrollCue, setShowCoachingScrollCue] = useState(false);
+  const [negreanuActionNotice, setNegreanuActionNotice] = useState<NegreanuActionNotice | null>(null);
+  const [isNegreanuActionFresh, setIsNegreanuActionFresh] = useState(false);
   const coachedHandId = useRef<string | null>(null);
   const profileBeforeHand = useRef<UserProfile | null>(null);
+  const coachingScrollRef = useRef<HTMLDivElement | null>(null);
+  const coachingScrollCueTimeout = useRef<number | null>(null);
+  const hasShownCoachingScrollCue = useRef(false);
+  const latestNegreanuActionKey = useRef<string | null>(null);
+  const negreanuActionTimeout = useRef<number | null>(null);
 
   const raiseBounds = useMemo(() => getRaiseBounds(gameState), [gameState]);
   const amountToCall = callAmount(gameState);
@@ -45,13 +57,38 @@ export function TableGameClient() {
   const revealNegreanuCards = shouldRevealNegreanuCards(gameState);
   const negreanuCards = revealNegreanuCards ? gameState?.terminal?.dnHand ?? [] : ["hidden", "hidden"];
   const isHandComplete = gameState?.state === "COMPLETE";
+  const isUserActionPending = gameState?.actionOn === "user" && !isHandComplete;
+  const isNegreanuThinking = gameState?.actionOn === "dn" && !isHandComplete;
+
+  const resetCoachingScrollCue = useCallback(() => {
+    if (coachingScrollCueTimeout.current) {
+      clearTimeout(coachingScrollCueTimeout.current);
+      coachingScrollCueTimeout.current = null;
+    }
+    hasShownCoachingScrollCue.current = false;
+    setShowCoachingScrollCue(false);
+  }, []);
+
+  const leaveTable = useCallback(async () => {
+    if (isLeavingTable) {
+      return;
+    }
+
+    setIsLeavingTable(true);
+    setTableError(null);
+    try {
+      await signOut({ redirectUrl: "/" });
+    } catch (error) {
+      setIsLeavingTable(false);
+      setTableError(errorMessage(error));
+    }
+  }, [isLeavingTable, signOut]);
 
   const loadProfile = useCallback(async () => {
     const nextProfile = await fetchJson<UserProfile>("/api/user/profile");
     setProfile(nextProfile);
     if (nextProfile.freeHandsUsed >= nextProfile.freeHandsLimit && !nextProfile.hasApiKey) {
       setShowRateLimitModal(true);
-      setShowEvalModal(true);
     }
     return nextProfile;
   }, []);
@@ -118,12 +155,13 @@ export function TableGameClient() {
       setCoachingError(null);
       setCoachingMistake(null);
       setPastPatternMatch(null);
+      resetCoachingScrollCue();
     } catch (error) {
       setTableError(errorMessage(error));
     } finally {
       setIsActing(false);
     }
-  }, [loadProfile]);
+  }, [loadProfile, resetCoachingScrollCue]);
 
   const resolveShowdownIfNeeded = useCallback(async (state: GameState) => {
     if (state.state !== "SHOWDOWN") {
@@ -172,6 +210,7 @@ export function TableGameClient() {
       setVisibleCoachingText("");
       setCoachingMistake(null);
       setPastPatternMatch(null);
+      resetCoachingScrollCue();
 
       try {
         const response = await fetch("/api/coaching/analyze", {
@@ -185,7 +224,6 @@ export function TableGameClient() {
         if (response.status === 402) {
           setCoachingStatus("rate_limited");
           setShowRateLimitModal(true);
-          setShowEvalModal(true);
           await loadProfile();
           return;
         }
@@ -258,7 +296,7 @@ export function TableGameClient() {
         setCoachingError(errorMessage(error));
       }
     },
-    [loadProfile, profile]
+    [loadProfile, profile, resetCoachingScrollCue]
   );
 
   useEffect(() => {
@@ -288,6 +326,59 @@ export function TableGameClient() {
     return () => window.clearTimeout(timeout);
   }, [coachingText, visibleCoachingText]);
 
+  useEffect(() => {
+    const scrollArea = coachingScrollRef.current;
+    if (!scrollArea || hasShownCoachingScrollCue.current) {
+      return;
+    }
+
+    if (scrollArea.scrollHeight <= scrollArea.clientHeight + 4) {
+      return;
+    }
+
+    hasShownCoachingScrollCue.current = true;
+    setShowCoachingScrollCue(true);
+    coachingScrollCueTimeout.current = window.setTimeout(() => {
+      setShowCoachingScrollCue(false);
+      coachingScrollCueTimeout.current = null;
+    }, 1500);
+  }, [coachingMistake, coachingStatus, pastPatternMatch, visibleCoachingText]);
+
+  useEffect(() => {
+    return () => {
+      if (coachingScrollCueTimeout.current) {
+        clearTimeout(coachingScrollCueTimeout.current);
+      }
+      if (negreanuActionTimeout.current) {
+        clearTimeout(negreanuActionTimeout.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const notice = latestNegreanuActionNotice(gameState);
+    if (!notice) {
+      setNegreanuActionNotice(null);
+      latestNegreanuActionKey.current = null;
+      return;
+    }
+
+    setNegreanuActionNotice(notice);
+    if (notice.key === latestNegreanuActionKey.current) {
+      return;
+    }
+
+    latestNegreanuActionKey.current = notice.key;
+    setIsNegreanuActionFresh(true);
+    if (negreanuActionTimeout.current) {
+      clearTimeout(negreanuActionTimeout.current);
+    }
+    negreanuActionTimeout.current = window.setTimeout(() => {
+      setIsNegreanuActionFresh(false);
+      negreanuActionTimeout.current = null;
+    }, 2200);
+  }, [gameState]);
+
   const canAct = isUserTurn(gameState) && !isActing;
   const canFold = canAct && amountToCall > 0;
   const canCall = canAct;
@@ -310,36 +401,6 @@ export function TableGameClient() {
     }
   }, [apiKeyInput, loadProfile]);
 
-  const submitEval = useCallback(async () => {
-    if (!evalRating) {
-      return;
-    }
-
-    setIsSubmittingEval(true);
-    try {
-      await fetchJson<{ ok: true }>("/api/user/eval", {
-        method: "POST",
-        body: JSON.stringify({
-          rating: evalRating,
-          feedback: evalFeedback.trim() || undefined,
-          sessionId: gameState?.handId
-        })
-      });
-      setEvalSubmitted(true);
-      setShowEvalModal(false);
-    } catch (error) {
-      setTableError(errorMessage(error));
-    } finally {
-      setIsSubmittingEval(false);
-    }
-  }, [evalFeedback, evalRating, gameState?.handId]);
-
-  const skipEval = useCallback(() => {
-    setShowEvalModal(false);
-    setEvalRating(null);
-    setEvalFeedback("");
-  }, []);
-
   return (
     <main className="min-h-svh bg-[color:var(--color-bg)] text-[color:var(--color-text-primary)]">
       <div className="mx-auto grid min-h-svh w-full max-w-[1500px] gap-6 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1.42fr)_minmax(360px,0.58fr)] lg:px-8">
@@ -350,8 +411,20 @@ export function TableGameClient() {
             <HandCards cards={negreanuCards} hidden={!revealNegreanuCards} owner="Daniel Negreanu" />
           </div>
 
-          <ChipStack className="right-6 top-8" label="Stack" amount={gameState?.dnStack ?? 0} align="end" variant="negreanu" />
-          <ChipStack className="bottom-8 left-6" label="Your stack" amount={gameState?.userStack ?? 0} variant="user" />
+          {negreanuActionNotice ? (
+            <div
+              className={`absolute left-1/2 top-[178px] z-10 w-[min(360px,calc(100%-2rem))] -translate-x-1/2 rounded-[var(--radius-md)] border border-[rgb(201_168_76_/_0.3)] bg-[rgb(10_10_10_/_0.78)] px-4 py-3 text-center shadow-lift transition-shadow ${
+                isNegreanuActionFresh ? "shadow-[0_0_0_1px_rgb(201_168_76_/_0.45),0_0_26px_rgb(201_168_76_/_0.2)]" : ""
+              }`}
+              aria-live="polite"
+            >
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--color-gold)]">{negreanuActionNotice.text}</p>
+              <p className="mt-1 text-xs text-[color:var(--color-text-secondary)]">{negreanuActionNotice.detail}</p>
+            </div>
+          ) : null}
+
+          <ChipStack className="right-12 top-10" label="Stack" amount={gameState?.dnStack ?? 0} align="end" variant="negreanu" />
+          <ChipStack className="bottom-10 left-12" label="Your stack" amount={gameState?.userStack ?? 0} variant="user" />
 
           <div className="absolute left-1/2 top-[42%] flex w-full max-w-[440px] -translate-x-1/2 -translate-y-1/2 justify-center gap-2 px-4 sm:gap-3">
             {BOARD_SLOTS.map((slot) => (
@@ -364,7 +437,20 @@ export function TableGameClient() {
           </div>
 
           <div className="absolute bottom-9 left-1/2 flex -translate-x-1/2 flex-col items-center gap-3">
-            <HandCards cards={gameState?.userHand ?? []} owner="You" />
+            {isUserActionPending ? (
+              <p className="text-xs font-medium uppercase tracking-[0.1em] text-[color:var(--color-gold)]">Your turn</p>
+            ) : isNegreanuThinking ? (
+              <p className="text-xs font-medium uppercase tracking-[0.1em] text-[color:var(--color-text-muted)]">Negreanu is thinking...</p>
+            ) : null}
+            <div
+              className={
+                isUserActionPending
+                  ? "relative rounded-[var(--radius-md)] before:pointer-events-none before:absolute before:-inset-2 before:rounded-[var(--radius-md)] before:shadow-[0_0_0_2px_var(--color-gold)] before:content-[''] before:animate-pulse before:[animation-duration:1.5s]"
+                  : ""
+              }
+            >
+              <HandCards cards={gameState?.userHand ?? []} owner="You" />
+            </div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-secondary)]">You</p>
           </div>
         </section>
@@ -378,10 +464,11 @@ export function TableGameClient() {
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() => setShowEvalModal(true)}
-                className="rounded-[var(--radius-sm)] px-2 py-1 text-sm text-[color:var(--color-text-secondary)] transition-colors hover:text-[color:var(--color-text-primary)]"
+                onClick={() => void leaveTable()}
+                disabled={isLeavingTable}
+                className="rounded-[var(--radius-sm)] px-2 py-1 text-sm text-[color:var(--color-text-secondary)] transition-colors hover:text-[color:var(--color-text-primary)] disabled:cursor-wait disabled:text-[color:var(--color-text-muted)]"
               >
-                Leave Table
+                {isLeavingTable ? "Leaving" : "Leave Table"}
               </button>
               <Link href="/settings" className="rounded-[var(--radius-sm)] px-2 py-1 text-sm text-[color:var(--color-text-secondary)] transition-colors hover:text-[color:var(--color-text-primary)]">
                 Settings
@@ -460,7 +547,7 @@ export function TableGameClient() {
             ) : null}
           </section>
 
-          <section className="flex-1 rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-5">
+          <section className="relative flex min-h-[320px] flex-1 flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-5">
             <div className="flex items-center gap-3">
               <div className="grid size-9 place-items-center rounded-full bg-[color:var(--color-gold)] text-sm font-semibold text-[color:var(--color-bg)]">N</div>
               <div>
@@ -478,18 +565,33 @@ export function TableGameClient() {
                 New pattern noticed: {coachingMistake.pattern}
               </div>
             ) : null}
-            <div className="mt-6 min-h-[180px] text-[15px] leading-7 text-[color:var(--color-text-primary)]" aria-live="polite">
-              {visibleCoachingText ? (
-                <GlossaryText text={visibleCoachingText} />
-              ) : coachingStatus === "thinking" || coachingStatus === "streaming" ? (
-                <p className="text-[color:var(--color-text-secondary)]">Daniel Negreanu is thinking through the hand.</p>
-              ) : coachingStatus === "rate_limited" ? (
-                <p className="text-[color:var(--color-text-secondary)]">You have reached the free-hand limit. Add your Anthropic key in settings to keep playing.</p>
-              ) : coachingStatus === "error" ? (
-                <p className="text-[rgb(222_120_134)]">{coachingError ?? "Coaching failed."}</p>
-              ) : (
-                <p className="text-[color:var(--color-text-secondary)]">Coaching appears here after the hand. Play clean, because he is going to notice the decision that mattered.</p>
-              )}
+            <div
+              className="relative mt-6 min-h-0 flex-1"
+            >
+              <div
+                ref={coachingScrollRef}
+                className="h-full overflow-y-auto overflow-x-hidden pr-4 text-[15px] leading-7 text-[color:var(--color-text-primary)] [overflow-wrap:anywhere] [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[color:var(--color-gold-muted)] [&::-webkit-scrollbar-track]:bg-[color:var(--color-surface)]"
+                aria-live="polite"
+                style={{ scrollbarColor: "var(--color-gold-muted) var(--color-surface)", scrollbarWidth: "thin" }}
+              >
+                {visibleCoachingText ? (
+                  <GlossaryText text={visibleCoachingText} />
+                ) : coachingStatus === "thinking" || coachingStatus === "streaming" ? (
+                  <p className="text-[color:var(--color-text-secondary)]">Daniel Negreanu is thinking through the hand.</p>
+                ) : coachingStatus === "rate_limited" ? (
+                  <p className="text-[color:var(--color-text-secondary)]">You have reached the free-hand limit. Add your Anthropic key in settings to keep playing.</p>
+                ) : coachingStatus === "error" ? (
+                  <p className="text-[rgb(222_120_134)]">{coachingError ?? "Coaching failed."}</p>
+                ) : (
+                  <p className="text-[color:var(--color-text-secondary)]">Coaching appears here after the hand. Play clean, because he is going to notice the decision that mattered.</p>
+                )}
+              </div>
+              {showCoachingScrollCue ? (
+                <div
+                  className="pointer-events-none absolute bottom-0 right-0 top-0 w-1 animate-[pulse_1.5s_ease-in-out_1] rounded-full bg-[color:var(--color-gold)] shadow-[0_0_16px_rgb(201_168_76_/_0.55)]"
+                  aria-hidden="true"
+                />
+              ) : null}
             </div>
           </section>
         </aside>
@@ -502,16 +604,6 @@ export function TableGameClient() {
         onClose={() => setShowRateLimitModal(false)}
         onInputChange={setApiKeyInput}
         onSave={() => void saveApiKey()}
-      />
-      <EvalModal
-        feedback={evalFeedback}
-        isOpen={showEvalModal && !evalSubmitted && !showRateLimitModal}
-        isSubmitting={isSubmittingEval}
-        rating={evalRating}
-        onClose={skipEval}
-        onFeedbackChange={setEvalFeedback}
-        onRatingChange={setEvalRating}
-        onSubmit={() => void submitEval()}
       />
     </main>
   );
@@ -571,6 +663,60 @@ function shouldRevealNegreanuCards(state: GameState | null): boolean {
 function findPastPattern(pattern: string, mistakes: UserProfile["mistakes"]): string | null {
   const normalized = normalizePattern(pattern);
   return mistakes.find((mistake) => normalizePattern(mistake.pattern) === normalized)?.pattern ?? null;
+}
+
+function latestNegreanuActionNotice(state: GameState | null): NegreanuActionNotice | null {
+  if (!state) {
+    return null;
+  }
+
+  for (let index = state.handHistory.length - 1; index >= 0; index -= 1) {
+    const entry = state.handHistory[index];
+    if (entry.actor !== "dn") {
+      continue;
+    }
+
+    return {
+      detail: actionNoticeDetail(entry),
+      key: `${state.handId}:${index}:${entry.action}:${entry.amount ?? ""}:${entry.pot ?? ""}`,
+      text: formatNegreanuAction(entry)
+    };
+  }
+
+  return null;
+}
+
+function formatNegreanuAction(entry: HandHistoryEntry): string {
+  if (entry.action === "raise" && entry.amount) {
+    return `Daniel Negreanu raises to ${formatChips(entry.amount)}`;
+  }
+  if (entry.action === "call" && entry.amount) {
+    return `Daniel Negreanu calls ${formatChips(entry.amount)}`;
+  }
+  if (entry.action === "check") {
+    return "Daniel Negreanu checks";
+  }
+  if (entry.action === "fold") {
+    return "Daniel Negreanu folds";
+  }
+
+  return `Daniel Negreanu ${entry.action.replace(/_/g, " ")}`;
+}
+
+function actionNoticeDetail(entry: HandHistoryEntry): string {
+  const street = formatStreet(entry.state);
+  const pot = typeof entry.pot === "number" ? `, pot ${formatChips(entry.pot)}` : "";
+
+  return `${street}${pot}`;
+}
+
+function formatStreet(state?: HandHistoryEntry["state"]): string {
+  if (!state) {
+    return "Table action";
+  }
+
+  const label = String(state).toLowerCase().replace(/_/g, " ");
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 function coachingStatusLabel(status: "idle" | "thinking" | "streaming" | "done" | "error" | "rate_limited"): string {
@@ -714,21 +860,21 @@ function ChipStack({
 
   return (
     <div className={`absolute flex flex-col ${align === "end" ? "items-end" : "items-start"} ${className}`}>
-      <div className="relative h-[92px] w-7" aria-hidden="true">
+      <div className="relative h-[120px] w-10" aria-hidden="true">
         {colors.map((color, index) => (
           <span
             key={`${color}-${index}`}
-            className="absolute left-0 size-7 rounded-full border-[1.5px] border-[rgb(255_255_255_/_0.2)]"
+            className="absolute bottom-0 left-0 size-10 rounded-full border-[1.5px] border-[rgb(255_255_255_/_0.2)]"
             style={{
               backgroundColor: color,
-              bottom: `${index * 16}px`,
+              transform: `translateY(-${index * 20}px)`,
               boxShadow: "inset 0 0 0 3px rgba(255,255,255,0.15), 0 2px 4px rgba(0,0,0,0.4)"
             }}
           />
         ))}
       </div>
       <p className="mt-1 text-[11px] text-[color:var(--color-text-muted)]">{label}</p>
-      <p className="font-mono text-[12px] tabular-nums text-[color:var(--color-gold)]">{formatChips(amount)}</p>
+      <p className="font-mono text-[16px] font-semibold leading-5 tabular-nums text-[color:var(--color-gold)]">{formatChips(amount)}</p>
     </div>
   );
 }
@@ -766,7 +912,7 @@ function RateLimitModal({
               Add your Anthropic API key to keep playing unlimited hands. The key is encrypted before storage and can be removed anytime.
             </p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-[var(--radius-sm)] px-2 py-1 text-sm text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]">
+          <button type="button" onClick={onClose} className="shrink-0 rounded-[var(--radius-sm)] px-2 py-1 text-sm text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]">
             Close
           </button>
         </div>
@@ -789,79 +935,6 @@ function RateLimitModal({
           className="mt-5 w-full rounded-[var(--radius-md)] bg-[color:var(--color-gold)] px-5 py-3 text-sm font-bold uppercase tracking-[0.08em] text-[color:var(--color-bg)] transition-colors hover:bg-[#d8b95c]"
         >
           {isSaving ? "Saving" : "Save Key"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function EvalModal({
-  feedback,
-  isOpen,
-  isSubmitting,
-  rating,
-  onClose,
-  onFeedbackChange,
-  onRatingChange,
-  onSubmit
-}: {
-  feedback: string;
-  isOpen: boolean;
-  isSubmitting: boolean;
-  rating: 1 | 2 | 3 | 4 | 5 | null;
-  onClose: () => void;
-  onFeedbackChange: (value: string) => void;
-  onRatingChange: (value: 1 | 2 | 3 | 4 | 5) => void;
-  onSubmit: () => void;
-}) {
-  if (!isOpen) {
-    return null;
-  }
-
-  const stars: Array<1 | 2 | 3 | 4 | 5> = [1, 2, 3, 4, 5];
-
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-[rgb(0_0_0_/_0.72)] px-4">
-      <div role="dialog" aria-modal="true" aria-labelledby="eval-title" className="w-full max-w-[480px] rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-6 shadow-lift">
-        <div className="flex items-start justify-between gap-4">
-          <p id="eval-title" className="font-display text-2xl font-semibold leading-tight text-[color:var(--color-text-primary)]">
-            How much did that sound like Daniel Negreanu?
-          </p>
-          <button type="button" onClick={onClose} className="rounded-[var(--radius-sm)] px-2 py-1 text-sm text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]">
-            Skip
-          </button>
-        </div>
-        <div className="mt-6 flex gap-2" aria-label="Rating">
-          {stars.map((star) => (
-            <button
-              key={star}
-              type="button"
-              aria-label={`${star} star${star === 1 ? "" : "s"}`}
-              onClick={() => onRatingChange(star)}
-              className={`text-4xl leading-none transition-colors ${rating && star <= rating ? "text-[color:var(--color-gold)]" : "text-[color:var(--color-border)] hover:text-[color:var(--color-gold-muted)]"}`}
-            >
-              ★
-            </button>
-          ))}
-        </div>
-        <label className="mt-6 block text-sm font-medium text-[color:var(--color-text-primary)]" htmlFor="eval-feedback">
-          What felt off?
-        </label>
-        <textarea
-          id="eval-feedback"
-          value={feedback}
-          onChange={(event) => onFeedbackChange(event.target.value)}
-          rows={3}
-          className="mt-2 w-full resize-none rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-4 py-3 text-sm text-[color:var(--color-text-primary)] outline-none transition-colors focus:border-[color:var(--color-gold)]"
-          placeholder="Optional"
-        />
-        <button
-          type="button"
-          onClick={onSubmit}
-          disabled={!rating || isSubmitting}
-          className="mt-5 w-full rounded-[var(--radius-md)] bg-[color:var(--color-gold)] px-5 py-3 text-sm font-bold uppercase tracking-[0.08em] text-[color:var(--color-bg)] transition-colors hover:bg-[#d8b95c]"
-        >
-          {isSubmitting ? "Submitting" : "Submit"}
         </button>
       </div>
     </div>

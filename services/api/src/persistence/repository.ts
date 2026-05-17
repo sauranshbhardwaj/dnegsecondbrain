@@ -3,16 +3,8 @@ import { Redis } from "@upstash/redis";
 import type { MistakeExtraction, MistakeProfileEntry } from "../coaching/types.js";
 import type { Env } from "../config/env.js";
 import type { EncryptedApiKey } from "../security/api-key-crypto.js";
-import { apiKeyKey, evalKey, mistakesKey, rateLimitHandsKey, sessionKey } from "./keys.js";
+import { apiKeyKey, mistakesKey, rateLimitHandsKey, sessionKey } from "./keys.js";
 import { upsertMistakeProfile } from "./mistakes.js";
-
-export type SessionEval = {
-  userId: string;
-  rating: 1 | 2 | 3 | 4 | 5;
-  feedback?: string;
-  sessionId?: string;
-  createdAt: string;
-};
 
 export interface PersistenceRepository {
   getCurrentSession<T = unknown>(userId: string): Promise<T | null>;
@@ -26,7 +18,6 @@ export interface PersistenceRepository {
   setEncryptedApiKey(userId: string, apiKey: EncryptedApiKey): Promise<void>;
   deleteEncryptedApiKey(userId: string): Promise<void>;
   hasEncryptedApiKey(userId: string): Promise<boolean>;
-  setSessionEval(userId: string, createdAt: string, evaluation: SessionEval): Promise<void>;
 }
 
 export class UpstashPersistenceRepository implements PersistenceRepository {
@@ -82,9 +73,6 @@ export class UpstashPersistenceRepository implements PersistenceRepository {
     return (await this.getEncryptedApiKey(userId)) !== null;
   }
 
-  async setSessionEval(userId: string, createdAt: string, evaluation: SessionEval): Promise<void> {
-    await this.redis.set(evalKey(userId, createdAt), evaluation);
-  }
 }
 
 export class MissingPersistenceRepository implements PersistenceRepository {
@@ -119,9 +107,6 @@ export class MissingPersistenceRepository implements PersistenceRepository {
     return Promise.reject(missingRedisError());
   }
   hasEncryptedApiKey(): Promise<boolean> {
-    return Promise.reject(missingRedisError());
-  }
-  setSessionEval(): Promise<void> {
     return Promise.reject(missingRedisError());
   }
 }

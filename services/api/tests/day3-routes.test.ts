@@ -307,7 +307,7 @@ describe("Day 3 protected routes", () => {
     expect(response.text).not.toContain("sk-ant-user-owned-key");
   });
 
-  it("stores session eval ratings for the authenticated user", async () => {
+  it("infers and persists a note from a completed hand for the authenticated user", async () => {
     const repository = new InMemoryRepository();
 
     const response = await invokeApp(
@@ -318,25 +318,34 @@ describe("Day 3 protected routes", () => {
       }),
       {
         method: "POST",
-        url: "/user/eval",
+        url: "/user/mistake/infer",
         body: {
-          rating: 5,
-          feedback: "Warm, direct, and specific.",
-          sessionId: "session_abc"
+          ...handFixtures[0],
+          handId: "hand_backfill",
+          userId: "spoofed_body_user",
+          userMistakeProfile: []
         }
       }
     );
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ ok: true });
-    expect([...repository.evals.values()]).toEqual([
-      expect.objectContaining({
-        userId: "clerk_user_123",
-        rating: 5,
-        feedback: "Warm, direct, and specific.",
-        sessionId: "session_abc"
-      })
-    ]);
+    expect(response.body).toMatchObject({
+      mistake: {
+        exists: true,
+        pattern: "calling river pressure with marginal hands",
+        severity: "high"
+      },
+      mistakes: [
+        {
+          pattern: "calling river pressure with marginal hands",
+          frequency: 1,
+          severity: "high",
+          handsContext: ["hand_backfill"]
+        }
+      ]
+    });
+    expect(await repository.getMistakes("clerk_user_123")).toEqual(response.body.mistakes);
+    expect(await repository.getMistakes("spoofed_body_user")).toEqual([]);
   });
 });
 

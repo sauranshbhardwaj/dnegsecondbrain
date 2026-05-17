@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
-import type { MistakeProfileEntry, UserProfile } from "@/lib/game-types";
+import { buildCoachingPayload, hasCompleteTerminalContext } from "@/lib/game-helpers";
+import type { GameState, MistakeExtraction, MistakeProfileEntry, UserProfile } from "@/lib/game-types";
 
 export function SettingsClient() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -18,7 +19,8 @@ export function SettingsClient() {
     setIsLoading(true);
     setError(null);
     try {
-      setProfile(await fetchJson<UserProfile>("/api/user/profile"));
+      const nextProfile = await fetchJson<UserProfile>("/api/user/profile");
+      setProfile(await backfillLatestHandNote(nextProfile));
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
@@ -156,6 +158,28 @@ export function SettingsClient() {
       </div>
     </main>
   );
+}
+
+async function backfillLatestHandNote(profile: UserProfile): Promise<UserProfile> {
+  if (profile.mistakes.length > 0) {
+    return profile;
+  }
+
+  try {
+    const gameState = await fetchJson<GameState>("/api/game/state");
+    if (!hasCompleteTerminalContext(gameState)) {
+      return profile;
+    }
+
+    const result = await fetchJson<{ mistake: MistakeExtraction; mistakes: MistakeProfileEntry[] }>("/api/user/mistake/infer", {
+      method: "POST",
+      body: JSON.stringify(buildCoachingPayload(gameState, profile.mistakes))
+    });
+
+    return result.mistakes.length > 0 ? { ...profile, mistakes: result.mistakes } : profile;
+  } catch {
+    return profile;
+  }
 }
 
 function MistakeCard({ mistake }: { mistake: MistakeProfileEntry }) {
