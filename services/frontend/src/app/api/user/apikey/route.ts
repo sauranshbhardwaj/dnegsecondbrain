@@ -1,9 +1,7 @@
-import type { NextRequest } from "next/server";
+import { nodeApiAuthHeaders, nodeApiUrl, proxyJsonResponse, readJsonBody, requireNodeApiAuth } from "@/lib/server/proxy";
 
-import { bearerHeaders, nodeApiUrl, proxyJsonResponse, readJsonBody, requireNodeApiAuth } from "@/lib/server/proxy";
-
-export async function POST(request: NextRequest) {
-  const auth = await requireNodeApiAuth(request);
+export async function POST(request: Request) {
+  const auth = await requireNodeApiAuth();
   if (auth instanceof Response) {
     return auth;
   }
@@ -12,7 +10,7 @@ export async function POST(request: NextRequest) {
 
   return proxyJsonResponse(nodeApiUrl("/user/apikey"), {
     method: "POST",
-    headers: bearerHeaders(auth.token),
+    headers: nodeApiAuthHeaders(auth),
     body: JSON.stringify(body)
   });
 }

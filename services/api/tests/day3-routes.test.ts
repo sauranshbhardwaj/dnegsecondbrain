@@ -72,6 +72,31 @@ describe("Day 3 protected routes", () => {
     expect(response.body).toEqual({ error: "Unauthorized" });
   });
 
+  it("accepts authenticated Next proxy headers in local keyless development", async () => {
+    const response = await invokeApp(
+      createApp({
+        env,
+        repository: new InMemoryRepository()
+      }),
+      {
+        method: "GET",
+        url: "/user/profile",
+        headers: {
+          authorization: "Bearer local-keyless-session",
+          "x-clerk-user-id": "clerk_keyless_123"
+        }
+      }
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      mistakes: [],
+      freeHandsUsed: 0,
+      freeHandsLimit: 5,
+      hasApiKey: false
+    });
+  });
+
   it("uses Clerk userId, reads Redis mistakes, persists extracted mistakes, and increments usage once", async () => {
     const repository = new InMemoryRepository();
     const claudeClient = new CapturingClaudeClient();

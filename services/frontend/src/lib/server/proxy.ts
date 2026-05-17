@@ -1,5 +1,4 @@
-import { auth, getAuth } from "@clerk/nextjs/server";
-import type { NextRequest } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 
 const JSON_HEADERS = {
   "Content-Type": "application/json"
@@ -15,8 +14,8 @@ export type NodeApiAuthContext = {
   token: string;
 };
 
-export async function requireRouteAuth(request?: NextRequest): Promise<AuthContext | Response> {
-  const session = request ? getAuth(request) : await auth();
+export async function requireRouteAuth(): Promise<AuthContext | Response> {
+  const session = await auth();
 
   if (!session.userId) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -28,19 +27,22 @@ export async function requireRouteAuth(request?: NextRequest): Promise<AuthConte
   };
 }
 
-export async function requireNodeApiAuth(request: NextRequest): Promise<NodeApiAuthContext | Response> {
-  const authContext = await requireRouteAuth(request);
-  if (authContext instanceof Response) {
-    return authContext;
+export async function requireNodeApiAuth(): Promise<NodeApiAuthContext | Response> {
+  const { getToken, userId } = await auth();
+
+  if (!userId) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!authContext.token) {
+  const token = await getToken();
+
+  if (!token) {
     return Response.json({ error: "Unauthorized", message: "Clerk session token missing" }, { status: 401 });
   }
 
   return {
-    userId: authContext.userId,
-    token: authContext.token
+    userId,
+    token
   };
 }
 
@@ -92,10 +94,9 @@ export async function proxyJsonResponse(input: RequestInfo | URL, init?: Request
   }
 }
 
-export function bearerHeaders(token: string | null): HeadersInit {
-  return token
-    ? {
-        Authorization: `Bearer ${token}`
-      }
-    : {};
+export function nodeApiAuthHeaders(authContext: NodeApiAuthContext): HeadersInit {
+  return {
+    Authorization: `Bearer ${authContext.token}`,
+    "X-Clerk-User-Id": authContext.userId
+  };
 }

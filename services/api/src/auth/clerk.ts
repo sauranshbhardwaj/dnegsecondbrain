@@ -13,6 +13,10 @@ export type AuthHandlers = {
 };
 
 export function createAuthHandlers(env: Env): AuthHandlers {
+  if (!env.clerkSecretKey || !env.clerkPublishableKey) {
+    return createLocalProxyAuthHandlers();
+  }
+
   return {
     clerkMiddleware: createClerkMiddleware(env),
     requireAuth: requireApiAuth
@@ -58,6 +62,28 @@ export function createStaticAuthHandlers(userId: string): AuthHandlers {
   return {
     clerkMiddleware: (_req, _res, next) => next(),
     requireAuth: (req, _res, next) => {
+      (req as AuthenticatedRequest).authUserId = userId;
+      next();
+    }
+  };
+}
+
+function createLocalProxyAuthHandlers(): AuthHandlers {
+  return {
+    clerkMiddleware: (_req, _res, next) => next(),
+    requireAuth: (req, res, next) => {
+      if (process.env.NODE_ENV === "production") {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+
+      const userId = req.header("x-clerk-user-id");
+      const authorization = req.header("authorization");
+      if (!userId || !authorization?.startsWith("Bearer ")) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+
       (req as AuthenticatedRequest).authUserId = userId;
       next();
     }

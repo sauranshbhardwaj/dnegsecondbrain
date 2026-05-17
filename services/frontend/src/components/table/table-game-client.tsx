@@ -205,6 +205,26 @@ export function TableGameClient() {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
+        let sawDone = false;
+        const handleStreamEvent = (event: CoachingStreamEvent) => {
+          switch (event.type) {
+            case "chunk":
+              setCoachingText((text) => text + event.text);
+              return false;
+            case "mistake":
+              setCoachingMistake(event.mistake);
+              if (event.mistake.exists) {
+                setPastPatternMatch(findPastPattern(event.mistake.pattern, baselineProfile.mistakes));
+              }
+              return false;
+            case "done":
+              setCoachingText(event.text);
+              setCoachingStatus("done");
+              return true;
+            case "error":
+              throw new Error(event.message);
+          }
+        };
 
         for (;;) {
           const { done, value } = await reader.read();
@@ -217,25 +237,19 @@ export function TableGameClient() {
           buffer = parsed.rest;
 
           for (const message of parsed.messages) {
-            const event = message.data;
-            switch (event.type) {
-              case "chunk":
-                setCoachingText((text) => text + event.text);
-                break;
-              case "mistake":
-                setCoachingMistake(event.mistake);
-                if (event.mistake.exists) {
-                  setPastPatternMatch(findPastPattern(event.mistake.pattern, baselineProfile.mistakes));
-                }
-                break;
-              case "done":
-                setCoachingText(event.text);
-                setCoachingStatus("done");
-                break;
-              case "error":
-                throw new Error(event.message);
-            }
+            sawDone = handleStreamEvent(message.data) || sawDone;
           }
+        }
+
+        if (buffer.trim()) {
+          const parsed = parseSseMessages<CoachingStreamEvent>(`${buffer}\n\n`);
+          for (const message of parsed.messages) {
+            sawDone = handleStreamEvent(message.data) || sawDone;
+          }
+        }
+
+        if (!sawDone) {
+          setCoachingStatus("done");
         }
 
         await loadProfile();
@@ -444,16 +458,6 @@ export function TableGameClient() {
                 {tableError}
               </p>
             ) : null}
-            {tableError ? (
-              <button
-                type="button"
-                onClick={() => void startNewHand()}
-                disabled={isActing}
-                className="mt-3 w-full rounded-[var(--radius-md)] border border-[rgb(201_168_76_/_0.28)] px-4 py-3 text-sm font-bold uppercase tracking-[0.08em] text-[color:var(--color-gold)] transition-colors hover:bg-[rgb(201_168_76_/_0.1)]"
-              >
-                Start Fresh
-              </button>
-            ) : null}
           </section>
 
           <section className="flex-1 rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-5">
@@ -577,7 +581,7 @@ function coachingStatusLabel(status: "idle" | "thinking" | "streaming" | "done" 
     return "coaching";
   }
   if (status === "done") {
-    return "analysis complete";
+    return "completed";
   }
   if (status === "error") {
     return "needs attention";
