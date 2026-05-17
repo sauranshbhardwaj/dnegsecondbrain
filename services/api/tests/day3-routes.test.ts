@@ -72,7 +72,7 @@ describe("Day 3 protected routes", () => {
     expect(response.body).toEqual({ error: "Unauthorized" });
   });
 
-  it("accepts authenticated Next proxy headers in local keyless development", async () => {
+  it("rejects local proxy headers without Clerk verification", async () => {
     const response = await invokeApp(
       createApp({
         env,
@@ -88,13 +88,8 @@ describe("Day 3 protected routes", () => {
       }
     );
 
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual({
-      mistakes: [],
-      freeHandsUsed: 0,
-      freeHandsLimit: 5,
-      hasApiKey: false
-    });
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({ error: "Unauthorized" });
   });
 
   it("uses Clerk userId, reads Redis mistakes, persists extracted mistakes, and increments usage once", async () => {

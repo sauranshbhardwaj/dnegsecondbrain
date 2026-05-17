@@ -94,6 +94,50 @@ export async function proxyJsonResponse(input: RequestInfo | URL, init?: Request
   }
 }
 
+export async function proxyGameJsonResponse(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  try {
+    const response = await fetch(input, {
+      ...init,
+      headers: {
+        ...JSON_HEADERS,
+        ...init?.headers
+      },
+      cache: "no-store"
+    });
+    const text = await response.text();
+    const payload = JSON.parse(text) as unknown;
+
+    return Response.json(stripDeckFields(payload), { status: response.status });
+  } catch (error) {
+    return Response.json(
+      {
+        error: "Proxy request failed",
+        message: error instanceof Error ? error.message : "Unknown proxy error"
+      },
+      { status: 502 }
+    );
+  }
+}
+
+function stripDeckFields(payload: unknown): unknown {
+  if (Array.isArray(payload)) {
+    return payload.map(stripDeckFields);
+  }
+
+  if (!payload || typeof payload !== "object") {
+    return payload;
+  }
+
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(payload as Record<string, unknown>)) {
+    if (key === "deck") {
+      continue;
+    }
+    sanitized[key] = stripDeckFields(value);
+  }
+  return sanitized;
+}
+
 export function nodeApiAuthHeaders(authContext: NodeApiAuthContext): HeadersInit {
   return {
     Authorization: `Bearer ${authContext.token}`,

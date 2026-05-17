@@ -1,4 +1,4 @@
-import { pokerEngineUrl, proxyJsonResponse, readJsonBody, requireRouteAuth } from "@/lib/server/proxy";
+import { pokerEngineUrl, proxyGameJsonResponse, readJsonBody, requireRouteAuth } from "@/lib/server/proxy";
 
 export async function POST(request: Request) {
   const auth = await requireRouteAuth();
@@ -8,7 +8,7 @@ export async function POST(request: Request) {
 
   const body = await readJsonBody(request);
 
-  return proxyJsonResponse(pokerEngineUrl("/game/showdown"), {
+  return proxyGameJsonResponse(pokerEngineUrl("/game/showdown"), {
     method: "POST",
     body: JSON.stringify({
       ...body,

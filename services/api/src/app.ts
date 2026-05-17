@@ -41,13 +41,19 @@ export function createApp(deps: AppDeps = {}) {
   const repository = deps.repository ?? createPersistenceRepository(env);
   const auth = deps.auth ?? createAuthHandlers(env);
 
-  app.use(auth.clerkMiddleware);
-  app.use(cors());
+  app.use(
+    cors({
+      origin: process.env.FRONTEND_URL || "http://localhost:3000",
+      credentials: true
+    })
+  );
   app.use(express.json({ limit: "1mb" }));
 
   app.get("/health", (_req, res) => {
     res.json({ ok: true, service: "dn-second-brain-api" });
   });
+
+  app.use(auth.clerkMiddleware);
 
   app.use(
     "/coaching",

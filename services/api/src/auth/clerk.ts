@@ -13,10 +13,6 @@ export type AuthHandlers = {
 };
 
 export function createAuthHandlers(env: Env): AuthHandlers {
-  if (!env.clerkSecretKey || !env.clerkPublishableKey) {
-    return createLocalProxyAuthHandlers();
-  }
-
   return {
     clerkMiddleware: createClerkMiddleware(env),
     requireAuth: requireApiAuth
@@ -24,15 +20,27 @@ export function createAuthHandlers(env: Env): AuthHandlers {
 }
 
 export function createClerkMiddleware(env: Env): RequestHandler {
-  if (!env.clerkSecretKey || !env.clerkPublishableKey) {
-    return (_req, _res, next) => next();
-  }
-
-  return clerkMiddleware({
+  const middleware = clerkMiddleware({
     secretKey: env.clerkSecretKey,
     publishableKey: env.clerkPublishableKey,
     ...(env.clerkJwtKey ? { jwtKey: env.clerkJwtKey } : {})
   });
+
+  return (req, res, next) => {
+    middleware(req, res, (error?: unknown) => {
+      if (!error) {
+        next();
+        return;
+      }
+
+      if (res.headersSent || res.writableEnded) {
+        next(error);
+        return;
+      }
+
+      res.status(401).json({ error: "Unauthorized" });
+    });
+  };
 }
 
 export function requireApiAuth(req: Request, res: Response, next: NextFunction): void {
@@ -62,28 +70,6 @@ export function createStaticAuthHandlers(userId: string): AuthHandlers {
   return {
     clerkMiddleware: (_req, _res, next) => next(),
     requireAuth: (req, _res, next) => {
-      (req as AuthenticatedRequest).authUserId = userId;
-      next();
-    }
-  };
-}
-
-function createLocalProxyAuthHandlers(): AuthHandlers {
-  return {
-    clerkMiddleware: (_req, _res, next) => next(),
-    requireAuth: (req, res, next) => {
-      if (process.env.NODE_ENV === "production") {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-      }
-
-      const userId = req.header("x-clerk-user-id");
-      const authorization = req.header("authorization");
-      if (!userId || !authorization?.startsWith("Bearer ")) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-      }
-
       (req as AuthenticatedRequest).authUserId = userId;
       next();
     }

@@ -1,4 +1,4 @@
-import { pokerEngineUrl, proxyJsonResponse, requireRouteAuth } from "@/lib/server/proxy";
+import { pokerEngineUrl, proxyGameJsonResponse, requireRouteAuth } from "@/lib/server/proxy";
 
 export async function GET() {
   const auth = await requireRouteAuth();
@@ -9,5 +9,5 @@ export async function GET() {
   const url = new URL(pokerEngineUrl("/game/state"));
   url.searchParams.set("userId", auth.userId);
 
-  return proxyJsonResponse(url);
+  return proxyGameJsonResponse(url);
 }
