@@ -21,6 +21,7 @@ def test_new_and_get_state_endpoints() -> None:
     assert state["userId"] == "api_user"
     assert state["smallBlind"] == SMALL_BLIND
     assert state["bigBlind"] == BIG_BLIND
+    assert "deck" not in state
     if state["state"] == "COMPLETE":
         assert state["terminal"] is not None
         assert state["dnHand"] == state["terminal"]["dnHand"]
@@ -30,7 +31,9 @@ def test_new_and_get_state_endpoints() -> None:
     get_response = request("GET", "/game/state", params={"userId": "api_user"})
 
     assert get_response.status_code == 200
-    assert get_response.json()["handId"] == state["handId"]
+    current = get_response.json()
+    assert current["handId"] == state["handId"]
+    assert "deck" not in current
 
 
 def test_action_endpoint_rejects_missing_game() -> None:
@@ -49,6 +52,7 @@ def test_action_endpoint_accepts_user_turn_action() -> None:
     assert response.status_code == 200
     updated = response.json()
     assert updated["userId"] == user_id
+    assert "deck" not in updated
     assert updated["state"] in {"PREFLOP", "FLOP", "TURN", "RIVER", "SHOWDOWN", "COMPLETE"}
     assert updated["handHistory"]
     assert updated["dnHand"] == ["hidden", "hidden"] or updated["showdown"] is not None or updated["terminal"] is not None
@@ -81,6 +85,7 @@ def test_showdown_endpoint_reveals_and_scores_hand() -> None:
     result = response.json()
     assert result["winner"] == "user"
     assert result["potAwarded"] == {"user": 400, "dn": 0}
+    assert "deck" not in result["gameState"]
     assert result["gameState"]["dnHand"] == ["Kc", "Kd"]
     assert result["gameState"]["terminal"]["reason"] == "showdown"
     assert result["gameState"]["terminal"]["potAwarded"] == {"user": 400, "dn": 0}

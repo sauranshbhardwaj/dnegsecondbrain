@@ -5,7 +5,7 @@ from app.bot import DNBot
 from app.constants import BIG_BLIND, DN, SMALL_BLIND, STARTING_STACK, USER
 from app.deck import assert_unique_cards, burn, deal, shuffled_deck
 from app.evaluator import evaluate_showdown
-from app.models import GamePhase, GameState, HandHistoryEntry, PlayerAction, ShowdownResult, TerminalHand
+from app.models import GamePhase, GameState, HandHistoryEntry, PlayerAction, PublicGameState, ShowdownResult, TerminalHand
 
 
 ACTIVE_PHASES = {GamePhase.PREFLOP, GamePhase.FLOP, GamePhase.TURN, GamePhase.RIVER}
@@ -18,7 +18,7 @@ class GameService:
         self.auto_play_dn = auto_play_dn
         self.sessions: dict[str, GameState] = {}
 
-    def new_game(self, user_id: str) -> GameState:
+    def new_game(self, user_id: str) -> PublicGameState:
         deck = shuffled_deck(self.rng)
         user_hand = deal(deck, 2)
         dn_hand = deal(deck, 2)
@@ -61,10 +61,10 @@ class GameService:
             self._run_dn_until_user_or_terminal(state)
         return self.public_state(state)
 
-    def get_state(self, user_id: str) -> GameState:
+    def get_state(self, user_id: str) -> PublicGameState:
         return self.public_state(self._require_state(user_id))
 
-    def apply_user_action(self, user_id: str, action: PlayerAction, amount: int | None = None) -> GameState:
+    def apply_user_action(self, user_id: str, action: PlayerAction, amount: int | None = None) -> PublicGameState:
         state = self._require_state(user_id)
         if state.actionOn != USER:
             raise ValueError("It is not the user's turn")
@@ -136,11 +136,12 @@ class GameService:
         )
         return self._showdown_result_from_state(state)
 
-    def public_state(self, state: GameState) -> GameState:
+    def public_state(self, state: GameState) -> PublicGameState:
         data = state.model_dump()
+        data.pop("deck", None)
         if not (state.state == GamePhase.COMPLETE and state.terminal):
             data["dnHand"] = ["hidden", "hidden"]
-        return GameState(**data)
+        return PublicGameState(**data)
 
     def _showdown_result_from_state(self, state: GameState) -> ShowdownResult:
         if not state.showdown:

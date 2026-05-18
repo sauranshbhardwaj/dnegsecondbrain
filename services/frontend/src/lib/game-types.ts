@@ -30,7 +30,6 @@ export type GameState = {
   userId: string;
   state: GamePhase;
   street: number;
-  deck: string[];
   userHand: string[];
   dnHand: string[];
   board: string[];

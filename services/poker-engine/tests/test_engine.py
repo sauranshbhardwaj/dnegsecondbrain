@@ -22,7 +22,9 @@ def test_new_game_posts_blinds_and_hides_dn_hand() -> None:
     assert public.dnBet == SMALL_BLIND
     assert public.actionOn == DN
     assert public.dnHand == ["hidden", "hidden"]
+    assert "deck" not in public.model_dump()
     assert internal.dnHand != ["hidden", "hidden"]
+    assert len(internal.deck) == 48
 
 
 def test_min_raise_validation_and_valid_raise() -> None:
@@ -110,6 +112,7 @@ def test_user_can_fold_when_check_is_available() -> None:
     assert public.terminal.reason == "fold"
     assert public.terminal.potAwarded == {"user": 0, "dn": 100}
     assert public.terminal.board == public.board
+    assert "deck" not in public.model_dump()
 
 
 def test_all_in_call_moves_to_showdown() -> None:

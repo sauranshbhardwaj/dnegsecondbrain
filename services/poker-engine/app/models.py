@@ -84,6 +84,34 @@ class GameState(BaseModel):
     terminal: TerminalHand | None = None
 
 
+class PublicGameState(BaseModel):
+    handId: str
+    userId: str
+    state: GamePhase = GamePhase.WAITING
+    street: int = 0
+    userHand: list[str] = Field(default_factory=list)
+    dnHand: list[str] = Field(default_factory=list)
+    board: list[str] = Field(default_factory=list)
+    pot: int = 0
+    sidePots: list[Any] = Field(default_factory=list)
+    userStack: int = 0
+    dnStack: int = 0
+    userBet: int = 0
+    dnBet: int = 0
+    smallBlind: int = 25
+    bigBlind: int = 50
+    actionOn: Literal["user", "dn"] | None = None
+    lastAction: str | None = None
+    handHistory: list[HandHistoryEntry] = Field(default_factory=list)
+    isAllIn: bool = False
+    currentBet: int = 0
+    lastRaiseSize: int = 50
+    actedThisStreet: list[str] = Field(default_factory=list)
+    winner: Literal["user", "dn", "split"] | None = None
+    showdown: dict[str, Any] | None = None
+    terminal: TerminalHand | None = None
+
+
 class ShowdownResult(BaseModel):
     winner: Literal["user", "dn", "split"]
     userScore: int
@@ -92,4 +120,4 @@ class ShowdownResult(BaseModel):
     dnRank: str
     potAwarded: dict[str, int]
     isSplit: bool
-    gameState: GameState
+    gameState: PublicGameState
