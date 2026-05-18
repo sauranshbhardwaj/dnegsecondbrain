@@ -37,6 +37,7 @@ export function TableGameClient() {
   const [isSavingApiKey, setIsSavingApiKey] = useState(false);
   const [apiKeyError, setApiKeyError] = useState<string | null>(null);
   const [isLeavingTable, setIsLeavingTable] = useState(false);
+  const [isStartingNewHand, setIsStartingNewHand] = useState(false);
   const [showCoachingScrollCue, setShowCoachingScrollCue] = useState(false);
   const [negreanuActionNotice, setNegreanuActionNotice] = useState<NegreanuActionNotice | null>(null);
   const [isNegreanuActionFresh, setIsNegreanuActionFresh] = useState(false);
@@ -52,6 +53,7 @@ export function TableGameClient() {
   const amountToCall = callAmount(gameState);
   const handCounter = formatHandCounter(profile, gameState);
   const displayedPot = gameState && hasCompleteTerminalContext(gameState) ? terminalPotAwarded(gameState) : gameState?.pot ?? 0;
+  const winnerAnnouncement = isStartingNewHand ? null : formatWinnerAnnouncement(gameState);
   const visibleBoardCards = useMemo(() => getVisibleBoardCards(gameState), [gameState]);
   const revealNegreanuCards = shouldRevealNegreanuCards(gameState);
   const negreanuCards = revealNegreanuCards ? gameState?.terminal?.dnHand ?? [] : ["hidden", "hidden"];
@@ -141,6 +143,7 @@ export function TableGameClient() {
 
   const startNewHand = useCallback(async () => {
     setIsActing(true);
+    setIsStartingNewHand(true);
     setTableError(null);
     try {
       const currentProfile = await loadProfile();
@@ -159,6 +162,7 @@ export function TableGameClient() {
       setTableError(errorMessage(error));
     } finally {
       setIsActing(false);
+      setIsStartingNewHand(false);
     }
   }, [loadProfile, resetCoachingScrollCue]);
 
@@ -410,7 +414,22 @@ export function TableGameClient() {
             <HandCards cards={negreanuCards} hidden={!revealNegreanuCards} owner="Daniel Negreanu" />
           </div>
 
-          {negreanuActionNotice ? (
+          {winnerAnnouncement ? (
+            <div
+              className={`absolute left-1/2 top-[225px] z-20 w-[min(410px,calc(100%-2rem))] -translate-x-1/2 rounded-[var(--radius-md)] border px-5 py-4 text-center shadow-[0_18px_50px_rgb(0_0_0_/_0.3)] ${
+                winnerAnnouncement.tone === "user"
+                  ? "border-[rgb(45_106_79_/_0.7)] bg-[rgb(45_106_79_/_0.2)]"
+                  : winnerAnnouncement.tone === "negreanu"
+                    ? "border-[rgb(201_168_76_/_0.44)] bg-[rgb(10_10_10_/_0.84)]"
+                    : "border-[rgb(201_168_76_/_0.52)] bg-[rgb(201_168_76_/_0.12)]"
+              }`}
+              aria-live="polite"
+            >
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--color-gold)]">{winnerAnnouncement.eyebrow}</p>
+              <p className="mt-2 font-display text-2xl font-semibold text-[color:var(--color-text-primary)]">{winnerAnnouncement.title}</p>
+              <p className="mt-1 font-mono text-sm tabular-nums text-[color:var(--color-gold)]">{winnerAnnouncement.detail}</p>
+            </div>
+          ) : !isStartingNewHand && negreanuActionNotice ? (
             <div
               className={`absolute left-1/2 top-[178px] z-10 w-[min(360px,calc(100%-2rem))] -translate-x-1/2 rounded-[var(--radius-md)] border border-[rgb(201_168_76_/_0.3)] bg-[rgb(10_10_10_/_0.78)] px-4 py-3 text-center shadow-lift transition-shadow ${
                 isNegreanuActionFresh
@@ -619,11 +638,47 @@ function normalizePattern(pattern: string): string {
 }
 
 function formatHandCounter(profile: UserProfile | null, state: GameState | null): string {
+  if (profile?.hasApiKey) {
+    return "API key connected. Unlimited hands";
+  }
+
   const limit = profile?.freeHandsLimit ?? FREE_HANDS_FALLBACK;
   const completedHands = profile?.freeHandsUsed ?? 0;
   const currentHand = Math.max(1, Math.min(completedHands + (isActiveHand(state) || state?.state === "SHOWDOWN" ? 1 : 0), limit));
 
   return `Hand ${currentHand} of ${limit} free hands`;
+}
+
+function formatWinnerAnnouncement(state: GameState | null): { eyebrow: string; title: string; detail: string; tone: "user" | "negreanu" | "split" } | null {
+  if (state?.state !== "COMPLETE" || !state.terminal) {
+    return null;
+  }
+
+  const awarded = state.terminal.potAwarded;
+  if (state.terminal.winner === "split") {
+    return {
+      eyebrow: "Hand result",
+      title: "Split pot",
+      detail: `${formatChips(awarded.user)} each`,
+      tone: "split"
+    };
+  }
+
+  if (state.terminal.winner === "user") {
+    return {
+      eyebrow: "Hand result",
+      title: "You win the hand",
+      detail: `Won ${formatChips(awarded.user)}`,
+      tone: "user"
+    };
+  }
+
+  return {
+    eyebrow: "Hand result",
+    title: "Daniel Negreanu wins",
+    detail: `Won ${formatChips(awarded.dn)}`,
+    tone: "negreanu"
+  };
 }
 
 function getVisibleBoardCards(state: GameState | null): Array<string | undefined> {
