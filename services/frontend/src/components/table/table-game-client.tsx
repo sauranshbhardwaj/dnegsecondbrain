@@ -51,6 +51,7 @@ export function TableGameClient() {
 
   const raiseBounds = useMemo(() => getRaiseBounds(gameState), [gameState]);
   const amountToCall = callAmount(gameState);
+  const hasUnlimitedHands = profile?.hasApiKey === true;
   const handCounter = formatHandCounter(profile, gameState);
   const displayedPot = gameState && hasCompleteTerminalContext(gameState) ? terminalPotAwarded(gameState) : gameState?.pot ?? 0;
   const winnerAnnouncement = isStartingNewHand ? null : formatWinnerAnnouncement(gameState);
@@ -478,7 +479,14 @@ export function TableGameClient() {
           <header className="flex shrink-0 items-center justify-between rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-5">
             <div>
               <p className="font-display text-2xl font-semibold text-[color:var(--color-text-primary)]">Heads-up table</p>
-              <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">{handCounter}</p>
+              {hasUnlimitedHands ? (
+                <p className="mt-1 text-sm leading-6 text-[color:var(--color-text-secondary)]">
+                  <span>API key connected.</span>
+                  <span className="block">Unlimited hands</span>
+                </p>
+              ) : (
+                <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">{handCounter}</p>
+              )}
             </div>
             <div className="flex items-center gap-3">
               <button
@@ -638,10 +646,6 @@ function normalizePattern(pattern: string): string {
 }
 
 function formatHandCounter(profile: UserProfile | null, state: GameState | null): string {
-  if (profile?.hasApiKey) {
-    return "API key connected. Unlimited hands";
-  }
-
   const limit = profile?.freeHandsLimit ?? FREE_HANDS_FALLBACK;
   const completedHands = profile?.freeHandsUsed ?? 0;
   const currentHand = Math.max(1, Math.min(completedHands + (isActiveHand(state) || state?.state === "SHOWDOWN" ? 1 : 0), limit));
