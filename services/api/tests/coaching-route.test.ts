@@ -69,6 +69,20 @@ describe("coaching route", () => {
     expect(parsed.success).toBe(false);
   });
 
+  it("accepts fold-ended hands without showdown ranks", async () => {
+    const parsed = coachingAnalyzeRequestSchema.safeParse({
+      ...handFixtures[1],
+      userRank: null,
+      dnRank: null
+    });
+
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.userRank).toBeUndefined();
+      expect(parsed.data.dnRank).toBeUndefined();
+    }
+  });
+
   it("emits an SSE error when Claude streaming fails", async () => {
     await expect(
       analyzeHand(

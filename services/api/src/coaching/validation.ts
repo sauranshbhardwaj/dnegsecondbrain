@@ -1,6 +1,10 @@
 import { z } from "zod";
 
 const cardSchema = z.string().regex(/^[2-9TJQKA][cdhs]$/, "Card must use compact notation like Ah or Td");
+const optionalShowdownRankSchema = z.preprocess(
+  (value) => (value === null ? undefined : value),
+  z.string().min(1).optional()
+);
 
 export const handHistoryEntrySchema = z.object({
   actor: z.enum(["user", "dn", "system"]),
@@ -30,8 +34,8 @@ export const coachingAnalyzeRequestSchema = z.object({
   board: z.tuple([cardSchema, cardSchema, cardSchema, cardSchema, cardSchema]),
   winner: z.enum(["user", "dn", "split"]),
   pot: z.number().int().positive(),
-  userRank: z.string().min(1).optional(),
-  dnRank: z.string().min(1).optional(),
+  userRank: optionalShowdownRankSchema,
+  dnRank: optionalShowdownRankSchema,
   userMistakeProfile: z.array(mistakeProfileEntrySchema).default([])
 });
 

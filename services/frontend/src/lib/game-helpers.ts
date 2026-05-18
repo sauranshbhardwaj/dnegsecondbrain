@@ -76,8 +76,8 @@ export function buildCoachingPayload(state: GameState, mistakes: MistakeProfileE
     board: state.terminal.board,
     winner: state.terminal.winner,
     pot: terminalPotAwarded(state),
-    userRank: state.terminal.userRank,
-    dnRank: state.terminal.dnRank,
+    userRank: state.terminal.userRank ?? undefined,
+    dnRank: state.terminal.dnRank ?? undefined,
     userMistakeProfile: mistakes
   };
 }

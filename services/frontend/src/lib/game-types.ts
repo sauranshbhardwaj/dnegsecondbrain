@@ -21,8 +21,8 @@ export type TerminalHand = {
   userHand: [string, string];
   dnHand: [string, string];
   board: [string, string, string, string, string];
-  userRank?: string;
-  dnRank?: string;
+  userRank?: string | null;
+  dnRank?: string | null;
 };
 
 export type GameState = {
