@@ -197,8 +197,6 @@ class GameService:
         raise ValueError("Unsupported action")
 
     def _fold(self, state: GameState, actor: str, note: str | None) -> None:
-        if self._to_call(state, actor) <= 0:
-            raise ValueError("Cannot fold when facing no bet")
         winner = self._opponent(actor)
         pot = state.pot
         awards = {"user": 0, "dn": 0}

@@ -384,7 +384,7 @@ export function TableGameClient() {
   }, [gameState]);
 
   const canAct = isUserTurn(gameState) && !isActing;
-  const canFold = canAct && amountToCall > 0;
+  const canFold = canAct;
   const canCall = canAct;
 
   const saveApiKey = useCallback(async () => {

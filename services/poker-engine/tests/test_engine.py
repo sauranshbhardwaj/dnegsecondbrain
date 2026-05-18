@@ -85,6 +85,33 @@ def test_fold_awards_pot_with_terminal_context() -> None:
     assert public.userStack + public.dnStack + public.pot == STARTING_STACK * 2
 
 
+def test_user_can_fold_when_check_is_available() -> None:
+    service = GameService(random.Random(12), auto_play_dn=False)
+    service.new_game("user_1")
+    state = service.sessions["user_1"]
+    internal_dn_hand = list(state.dnHand)
+
+    service._apply_action(state, DN, PlayerAction.CALL)
+    service._apply_action(state, USER, PlayerAction.CALL)
+    assert state.state == GamePhase.FLOP
+    assert state.actionOn == USER
+    assert state.userBet == 0
+    assert state.dnBet == 0
+
+    public = service.apply_user_action("user_1", PlayerAction.FOLD)
+
+    assert public.state == GamePhase.COMPLETE
+    assert public.winner == DN
+    assert public.pot == 0
+    assert public.userStack == 950
+    assert public.dnStack == 1050
+    assert public.dnHand == internal_dn_hand
+    assert public.terminal is not None
+    assert public.terminal.reason == "fold"
+    assert public.terminal.potAwarded == {"user": 0, "dn": 100}
+    assert public.terminal.board == public.board
+
+
 def test_all_in_call_moves_to_showdown() -> None:
     service = GameService(random.Random(5), auto_play_dn=False)
     service.new_game("user_1")
