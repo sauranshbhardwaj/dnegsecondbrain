@@ -37,7 +37,7 @@ export async function requireNodeApiAuth(): Promise<NodeApiAuthContext | Respons
   const token = await getToken();
 
   if (!token) {
-    return Response.json({ error: "Unauthorized", message: "Clerk session token missing" }, { status: 401 });
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   return {
@@ -83,11 +83,11 @@ export async function proxyJsonResponse(input: RequestInfo | URL, init?: Request
         "Content-Type": response.headers.get("Content-Type") ?? "application/json"
       }
     });
-  } catch (error) {
+  } catch {
     return Response.json(
       {
         error: "Proxy request failed",
-        message: error instanceof Error ? error.message : "Unknown proxy error"
+        message: "Unable to reach the service right now."
       },
       { status: 502 }
     );
@@ -108,11 +108,11 @@ export async function proxyGameJsonResponse(input: RequestInfo | URL, init?: Req
     const payload = JSON.parse(text) as unknown;
 
     return Response.json(stripDeckFields(payload), { status: response.status });
-  } catch (error) {
+  } catch {
     return Response.json(
       {
         error: "Proxy request failed",
-        message: error instanceof Error ? error.message : "Unknown proxy error"
+        message: "Unable to reach the game service right now."
       },
       { status: 502 }
     );

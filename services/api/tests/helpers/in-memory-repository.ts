@@ -46,6 +46,17 @@ export class InMemoryRepository implements PersistenceRepository {
     return next;
   }
 
+  async claimFreeHand(userId: string, limit: number): Promise<{ allowed: boolean; count: number }> {
+    const current = this.freeHandCounts.get(userId) ?? 0;
+    if (current >= limit) {
+      return { allowed: false, count: current };
+    }
+
+    const next = current + 1;
+    this.freeHandCounts.set(userId, next);
+    return { allowed: true, count: next };
+  }
+
   async getEncryptedApiKey(userId: string): Promise<EncryptedApiKey | null> {
     return this.apiKeys.get(userId) ?? null;
   }

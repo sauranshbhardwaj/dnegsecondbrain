@@ -108,17 +108,3 @@ export type CoachingStreamEvent =
       type: "error";
       message: string;
     };
-
-export type CoachingAnalyzePayload = {
-  handId: string;
-  userId: string;
-  handHistory: HandHistoryEntry[];
-  userHand: [string, string];
-  dnHand: [string, string];
-  board: [string, string, string, string, string];
-  winner: Winner;
-  pot: number;
-  userRank?: string;
-  dnRank?: string;
-  userMistakeProfile: MistakeProfileEntry[];
-};

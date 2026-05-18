@@ -85,4 +85,16 @@ describe("Day 3 persistence helpers", () => {
     expect(bypassed).toEqual({ allowed: true, bypassed: true, count: 5 });
     expect(await repository.getFreeHandCount("user_limit")).toBe(5);
   });
+
+  it("allows only five simultaneous free-hand claims", async () => {
+    const repository = new InMemoryRepository();
+
+    const results = await Promise.all(
+      Array.from({ length: 6 }, () => checkAndIncrementFreeHandLimit(repository, "user_race", false))
+    );
+
+    expect(results.filter((result) => result.allowed)).toHaveLength(5);
+    expect(results.filter((result) => !result.allowed)).toHaveLength(1);
+    expect(await repository.getFreeHandCount("user_race")).toBe(5);
+  });
 });

@@ -37,6 +37,16 @@ class CapturingClaudeClient implements ClaudeClient {
   }
 }
 
+class SecretThrowingClaudeClient implements ClaudeClient {
+  async *streamText(): AsyncIterable<string> {
+    throw new Error("ANTHROPIC_API_KEY leaked at /Users/example/project");
+  }
+
+  async completeText(): Promise<string> {
+    throw new Error("ANTHROPIC_API_KEY leaked at /Users/example/project");
+  }
+}
+
 class CapturingMistakeExtractor implements MistakeExtractor {
   requests: CoachingAnalyzeRequest[] = [];
 
@@ -117,6 +127,7 @@ describe("Day 3 protected routes", () => {
         claudeClient,
         createClaudeClientForUserKey: () => claudeClient,
         createMistakeExtractor: () => extractor,
+        loadCanonicalHand: loadFixtureHand(),
         repository,
         auth: createStaticAuthHandlers("clerk_user_123")
       }),
@@ -127,6 +138,9 @@ describe("Day 3 protected routes", () => {
           ...handFixtures[0],
           handId: "hand_new",
           userId: "spoofed_body_user",
+          userHand: ["2c", "3d"],
+          winner: "user",
+          pot: 1,
           userMistakeProfile: []
         }
       }
@@ -137,6 +151,9 @@ describe("Day 3 protected routes", () => {
     expect(extractor.requests[0]).toMatchObject({
       handId: "hand_new",
       userId: "clerk_user_123",
+      userHand: handFixtures[0].userHand,
+      winner: handFixtures[0].winner,
+      pot: handFixtures[0].pot,
       userMistakeProfile: [
         {
           pattern: "Paying off river pressure with medium strength hands",
@@ -166,6 +183,7 @@ describe("Day 3 protected routes", () => {
       createApp({
         env,
         claudeClient,
+        loadCanonicalHand: loadFixtureHand(),
         repository,
         auth: createStaticAuthHandlers("clerk_user_123")
       }),
@@ -187,6 +205,57 @@ describe("Day 3 protected routes", () => {
     expect(await repository.getFreeHandCount("clerk_user_123")).toBe(5);
   });
 
+  it("does not expose internal setup errors in JSON responses", async () => {
+    const response = await invokeApp(
+      createApp({
+        env,
+        auth: createStaticAuthHandlers("clerk_user_123")
+      }),
+      {
+        method: "GET",
+        url: "/user/profile"
+      }
+    );
+
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({
+      error: "Profile lookup failed",
+      message: "Unable to load profile right now."
+    });
+    expect(response.text).not.toContain("UPSTASH_REDIS_REST_TOKEN");
+  });
+
+  it("does not expose internal provider errors in coaching SSE responses", async () => {
+    const response = await invokeApp(
+      createApp({
+        env,
+        claudeClient: new SecretThrowingClaudeClient(),
+        createMistakeExtractor: () => new CapturingMistakeExtractor({ exists: false }),
+        loadCanonicalHand: loadFixtureHand(),
+        repository: new InMemoryRepository(),
+        auth: createStaticAuthHandlers("clerk_user_123")
+      }),
+      {
+        method: "POST",
+        url: "/coaching/analyze",
+        body: handFixtures[0]
+      }
+    );
+
+    expect(response.status).toBe(200);
+    expect(parseSseEvents(response.text)).toEqual([
+      {
+        event: "error",
+        data: {
+          type: "error",
+          message: "Unable to generate coaching right now."
+        }
+      }
+    ]);
+    expect(response.text).not.toContain("ANTHROPIC_API_KEY");
+    expect(response.text).not.toContain("/Users/example/project");
+  });
+
   it("bypasses the free-hand limit with a stored user API key and uses that key for Claude", async () => {
     const repository = new InMemoryRepository();
     repository.freeHandCounts.set("clerk_user_123", 5);
@@ -205,6 +274,7 @@ describe("Day 3 protected routes", () => {
           seenApiKeys.push(decryptApiKey(encryptedApiKey, env.apiKeyEncryptionSecret));
           return claudeClient;
         },
+        loadCanonicalHand: loadFixtureHand(),
         repository,
         auth: createStaticAuthHandlers("clerk_user_123")
       }),
@@ -253,6 +323,52 @@ describe("Day 3 protected routes", () => {
     expect(await repository.getEncryptedApiKey("clerk_user_123")).toBeNull();
   });
 
+  it("rejects malformed API keys before encrypting them", async () => {
+    const repository = new InMemoryRepository();
+    const response = await invokeApp(
+      createApp({
+        env,
+        loadCanonicalHand: loadFixtureHand(),
+        repository,
+        auth: createStaticAuthHandlers("clerk_user_123")
+      }),
+      {
+        method: "POST",
+        url: "/user/apikey",
+        body: { apiKey: "not-a-real-key" }
+      }
+    );
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({
+      error: "Invalid API key request",
+      message: "Enter a valid Anthropic API key."
+    });
+    expect(await repository.getEncryptedApiKey("clerk_user_123")).toBeNull();
+  });
+
+  it("trims API keys before encrypting them", async () => {
+    const repository = new InMemoryRepository();
+    const response = await invokeApp(
+      createApp({
+        env,
+        loadCanonicalHand: loadFixtureHand(),
+        repository,
+        auth: createStaticAuthHandlers("clerk_user_123")
+      }),
+      {
+        method: "POST",
+        url: "/user/apikey",
+        body: { apiKey: "  sk-ant-user-owned-key  " }
+      }
+    );
+    const encrypted = await repository.getEncryptedApiKey("clerk_user_123");
+
+    expect(response.status).toBe(200);
+    expect(encrypted).not.toBeNull();
+    expect(decryptApiKey(encrypted!, env.apiKeyEncryptionSecret)).toBe("sk-ant-user-owned-key");
+  });
+
   it("returns profile data without API key material", async () => {
     const repository = new InMemoryRepository();
     repository.freeHandCounts.set("clerk_user_123", 3);
@@ -274,6 +390,7 @@ describe("Day 3 protected routes", () => {
     const response = await invokeApp(
       createApp({
         env,
+        loadCanonicalHand: loadFixtureHand(),
         repository,
         auth: createStaticAuthHandlers("clerk_user_123")
       }),
@@ -308,6 +425,7 @@ describe("Day 3 protected routes", () => {
     const response = await invokeApp(
       createApp({
         env,
+        loadCanonicalHand: loadFixtureHand(),
         repository,
         auth: createStaticAuthHandlers("clerk_user_123")
       }),
@@ -353,4 +471,15 @@ function parseSseEvents(text: string): Array<{ event: string; data: unknown }> {
       const data = JSON.parse(block.match(/^data: (.+)$/m)?.[1] ?? "{}") as unknown;
       return { event, data };
     });
+}
+
+function loadFixtureHand(fixture = handFixtures[0]) {
+  return async (userId: string, requestedHandId?: string) => {
+    const { userMistakeProfile: _ignored, ...hand } = fixture;
+    return {
+      ...hand,
+      handId: requestedHandId ?? hand.handId ?? "fixture_hand",
+      userId
+    };
+  };
 }

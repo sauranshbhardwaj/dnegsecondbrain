@@ -7,6 +7,7 @@ export type Env = {
   clerkSecretKey?: string;
   clerkPublishableKey?: string;
   clerkJwtKey?: string;
+  pokerEngineUrl?: string;
   upstashRedisRestUrl?: string;
   upstashRedisRestToken?: string;
   apiKeyEncryptionSecret?: string;
@@ -29,6 +30,7 @@ export function readEnv(): Env {
     clerkSecretKey: process.env.CLERK_SECRET_KEY,
     clerkPublishableKey: process.env.CLERK_PUBLISHABLE_KEY,
     clerkJwtKey: process.env.CLERK_JWT_KEY,
+    pokerEngineUrl: process.env.POKER_ENGINE_URL,
     upstashRedisRestUrl: process.env.UPSTASH_REDIS_REST_URL,
     upstashRedisRestToken: process.env.UPSTASH_REDIS_REST_TOKEN,
     apiKeyEncryptionSecret: process.env.API_KEY_ENCRYPTION_SECRET,

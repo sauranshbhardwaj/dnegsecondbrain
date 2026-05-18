@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { GlossaryText } from "@/components/glossary-text";
 import { formatChips, toDisplayCard } from "@/lib/cards";
-import { buildCoachingPayload, callAmount, getRaiseBounds, hasCompleteTerminalContext, isActiveHand, isUserTurn, nextActionLabel, terminalPotAwarded } from "@/lib/game-helpers";
+import { callAmount, getRaiseBounds, hasCompleteTerminalContext, isActiveHand, isUserTurn, nextActionLabel, terminalPotAwarded } from "@/lib/game-helpers";
 import type { CoachingStreamEvent, GameState, HandHistoryEntry, MistakeExtraction, PlayerAction, ShowdownResult, UserProfile } from "@/lib/game-types";
 import { parseSseMessages } from "@/lib/sse";
 
@@ -222,7 +222,7 @@ export function TableGameClient() {
           headers: {
             "Content-Type": "application/json"
           },
-          body: JSON.stringify(buildCoachingPayload(state, baselineProfile.mistakes))
+          body: JSON.stringify({ handId: state.handId })
         });
 
         if (response.status === 402) {

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
-import { buildCoachingPayload, hasCompleteTerminalContext } from "@/lib/game-helpers";
+import { hasCompleteTerminalContext } from "@/lib/game-helpers";
 import type { GameState, MistakeExtraction, MistakeProfileEntry, UserProfile } from "@/lib/game-types";
 
 export function SettingsClient() {
@@ -173,7 +173,7 @@ async function backfillLatestHandNote(profile: UserProfile): Promise<UserProfile
 
     const result = await fetchJson<{ mistake: MistakeExtraction; mistakes: MistakeProfileEntry[] }>("/api/user/mistake/infer", {
       method: "POST",
-      body: JSON.stringify(buildCoachingPayload(gameState, profile.mistakes))
+      body: JSON.stringify({ handId: gameState.handId })
     });
 
     return result.mistakes.length > 0 ? { ...profile, mistakes: result.mistakes } : profile;

@@ -6,6 +6,11 @@ import type { EncryptedApiKey } from "../security/api-key-crypto.js";
 import { apiKeyKey, mistakesKey, rateLimitHandsKey, sessionKey } from "./keys.js";
 import { upsertMistakeProfile } from "./mistakes.js";
 
+export type FreeHandClaim = {
+  allowed: boolean;
+  count: number;
+};
+
 export interface PersistenceRepository {
   getCurrentSession<T = unknown>(userId: string): Promise<T | null>;
   setCurrentSession<T = unknown>(userId: string, gameState: T): Promise<void>;
@@ -14,11 +19,24 @@ export interface PersistenceRepository {
   upsertMistake(userId: string, mistake: MistakeExtraction, handId?: string): Promise<MistakeProfileEntry[]>;
   getFreeHandCount(userId: string): Promise<number>;
   incrementFreeHandCount(userId: string): Promise<number>;
+  claimFreeHand(userId: string, limit: number): Promise<FreeHandClaim>;
   getEncryptedApiKey(userId: string): Promise<EncryptedApiKey | null>;
   setEncryptedApiKey(userId: string, apiKey: EncryptedApiKey): Promise<void>;
   deleteEncryptedApiKey(userId: string): Promise<void>;
   hasEncryptedApiKey(userId: string): Promise<boolean>;
 }
+
+const CLAIM_FREE_HAND_SCRIPT = `
+local current = tonumber(redis.call("GET", KEYS[1]) or "0")
+local limit = tonumber(ARGV[1])
+
+if current >= limit then
+  return {0, current}
+end
+
+local next_count = redis.call("INCR", KEYS[1])
+return {1, next_count}
+`;
 
 export class UpstashPersistenceRepository implements PersistenceRepository {
   constructor(private readonly redis: Redis) {}
@@ -55,6 +73,19 @@ export class UpstashPersistenceRepository implements PersistenceRepository {
 
   async incrementFreeHandCount(userId: string): Promise<number> {
     return this.redis.incr(rateLimitHandsKey(userId));
+  }
+
+  async claimFreeHand(userId: string, limit: number): Promise<FreeHandClaim> {
+    const [allowed, count] = await this.redis.eval<[number], [number, number]>(
+      CLAIM_FREE_HAND_SCRIPT,
+      [rateLimitHandsKey(userId)],
+      [limit]
+    );
+
+    return {
+      allowed: allowed === 1,
+      count
+    };
   }
 
   async getEncryptedApiKey(userId: string): Promise<EncryptedApiKey | null> {
@@ -95,6 +126,9 @@ export class MissingPersistenceRepository implements PersistenceRepository {
     return Promise.reject(missingRedisError());
   }
   incrementFreeHandCount(): Promise<number> {
+    return Promise.reject(missingRedisError());
+  }
+  claimFreeHand(): Promise<FreeHandClaim> {
     return Promise.reject(missingRedisError());
   }
   getEncryptedApiKey(): Promise<EncryptedApiKey | null> {

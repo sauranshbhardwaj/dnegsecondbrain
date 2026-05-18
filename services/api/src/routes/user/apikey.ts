@@ -3,25 +3,45 @@ import express from "express";
 import { z } from "zod";
 
 import { getAuthenticatedUserId } from "../../auth/clerk.js";
+import type { LoadCanonicalHand } from "../../coaching/canonical-hand.js";
 import { inferMistakeFromHand } from "../../coaching/mistake-extraction.js";
-import { coachingAnalyzeRequestSchema } from "../../coaching/validation.js";
 import type { Env } from "../../config/env.js";
 import type { PersistenceRepository } from "../../persistence/repository.js";
 import { FREE_HAND_LIMIT } from "../../rate-limit/free-hands.js";
 import { encryptApiKey } from "../../security/api-key-crypto.js";
 
-const apiKeyRequestSchema = z.union([
-  z.object({
-    apiKey: z.string().min(10),
-    delete: z.never().optional()
-  }),
-  z.object({
-    delete: z.literal(true),
-    apiKey: z.never().optional()
+const apiKeyErrorMessage = "Enter a valid Anthropic API key.";
+const anthropicApiKeySchema = z
+  .string()
+  .trim()
+  .min(20, apiKeyErrorMessage)
+  .max(512, apiKeyErrorMessage)
+  .regex(/^sk-ant-[A-Za-z0-9_-]+$/, apiKeyErrorMessage);
+
+const apiKeyRequestSchema = z
+  .object({
+    apiKey: anthropicApiKeySchema.optional(),
+    delete: z.literal(true).optional()
   })
-]);
+  .superRefine((value, context) => {
+    const hasApiKey = typeof value.apiKey === "string";
+    const shouldDelete = value.delete === true;
+
+    if (hasApiKey === shouldDelete) {
+      context.addIssue({
+        code: "custom",
+        path: ["apiKey"],
+        message: apiKeyErrorMessage
+      });
+    }
+  });
+
+const mistakeInferenceRequestSchema = z.object({
+  handId: z.string().min(1).optional()
+});
 
 export type UserApiKeyRouteDeps = {
+  loadCanonicalHand: LoadCanonicalHand;
   repository: PersistenceRepository;
   requireAuth: RequestHandler;
   env: Env;
@@ -45,10 +65,10 @@ export function createUserApiKeyRouter(deps: UserApiKeyRouteDeps): Router {
         freeHandsLimit: FREE_HAND_LIMIT,
         hasApiKey
       });
-    } catch (error) {
+    } catch {
       res.status(500).json({
         error: "Profile lookup failed",
-        message: errorMessage(error)
+        message: "Unable to load profile right now."
       });
     }
   });
@@ -58,6 +78,7 @@ export function createUserApiKeyRouter(deps: UserApiKeyRouteDeps): Router {
     if (!parsed.success) {
       res.status(400).json({
         error: "Invalid API key request",
+        message: apiKeyErrorMessage,
         issues: parsed.error.issues.map((issue) => ({
           path: issue.path.join("."),
           message: issue.message
@@ -68,28 +89,37 @@ export function createUserApiKeyRouter(deps: UserApiKeyRouteDeps): Router {
 
     try {
       const userId = getAuthenticatedUserId(req);
-      if ("delete" in parsed.data && parsed.data.delete) {
+      if (parsed.data.delete) {
         await deps.repository.deleteEncryptedApiKey(userId);
         res.json({ hasApiKey: false });
         return;
       }
 
+      const apiKey = parsed.data.apiKey;
+      if (!apiKey) {
+        res.status(400).json({
+          error: "Invalid API key request",
+          message: apiKeyErrorMessage
+        });
+        return;
+      }
+
       await deps.repository.setEncryptedApiKey(
         userId,
-        encryptApiKey(parsed.data.apiKey, deps.env.apiKeyEncryptionSecret)
+        encryptApiKey(apiKey, deps.env.apiKeyEncryptionSecret)
       );
       res.json({ hasApiKey: true });
-    } catch (error) {
+    } catch {
       res.status(500).json({
         error: "API key update failed",
-        message: errorMessage(error)
+        message: "Unable to update API key right now."
       });
       return;
     }
   });
 
   router.post("/mistake/infer", deps.requireAuth, async (req: Request, res: Response) => {
-    const parsed = coachingAnalyzeRequestSchema.safeParse(req.body);
+    const parsed = mistakeInferenceRequestSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
         error: "Invalid mistake inference request",
@@ -104,8 +134,9 @@ export function createUserApiKeyRouter(deps: UserApiKeyRouteDeps): Router {
     try {
       const userId = getAuthenticatedUserId(req);
       const existingMistakes = await deps.repository.getMistakes(userId);
+      const canonicalHand = await deps.loadCanonicalHand(userId, parsed.data.handId);
       const requestWithAuthUser = {
-        ...parsed.data,
+        ...canonicalHand,
         userId,
         userMistakeProfile: existingMistakes
       };
@@ -115,20 +146,13 @@ export function createUserApiKeyRouter(deps: UserApiKeyRouteDeps): Router {
         : existingMistakes;
 
       res.json({ mistake, mistakes });
-    } catch (error) {
+    } catch {
       res.status(500).json({
         error: "Mistake inference failed",
-        message: errorMessage(error)
+        message: "Unable to infer mistake notes right now."
       });
     }
   });
 
   return router;
-}
-
-function errorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return "Unknown API key storage error";
 }

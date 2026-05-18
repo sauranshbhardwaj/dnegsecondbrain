@@ -1,13 +1,13 @@
 import type { Request, RequestHandler, Response, Router } from "express";
 import express from "express";
-import { ZodError } from "zod";
+import { z } from "zod";
 
 import type { ClaudeClient } from "../claude/client.js";
+import type { LoadCanonicalHand } from "../coaching/canonical-hand.js";
 import { analyzeHand } from "../coaching/analyze.js";
 import { ClaudeMistakeExtractor } from "../coaching/mistake-extraction.js";
 import type { MistakeExtractor } from "../coaching/extractor.js";
 import type { CoachingAnalyzeRequest, CoachingStreamEvent } from "../coaching/types.js";
-import { coachingAnalyzeRequestSchema } from "../coaching/validation.js";
 import { getAuthenticatedUserId } from "../auth/clerk.js";
 import type { Env } from "../config/env.js";
 import type { PersistenceRepository } from "../persistence/repository.js";
@@ -18,16 +18,21 @@ export type CoachingRouteDeps = {
   claudeClient: ClaudeClient;
   createClaudeClientForUserKey: (encryptedApiKey: EncryptedApiKey) => ClaudeClient;
   createMistakeExtractor?: (claudeClient: ClaudeClient) => MistakeExtractor;
+  loadCanonicalHand: LoadCanonicalHand;
   repository: PersistenceRepository;
   requireAuth: RequestHandler;
   env: Env;
 };
 
+const coachingClientRequestSchema = z.object({
+  handId: z.string().min(1).optional()
+});
+
 export function createCoachingRouter(deps: CoachingRouteDeps): Router {
   const router = express.Router();
 
   router.post("/analyze", deps.requireAuth, async (req: Request, res: Response) => {
-    const parsed = coachingAnalyzeRequestSchema.safeParse(req.body);
+    const parsed = coachingClientRequestSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
         error: "Invalid coaching request",
@@ -47,6 +52,10 @@ export function createCoachingRouter(deps: CoachingRouteDeps): Router {
     try {
       const storedKey = await deps.repository.getEncryptedApiKey(userId);
       const hasUserApiKey = storedKey !== null;
+      const [canonicalHand, mistakeProfile] = await Promise.all([
+        deps.loadCanonicalHand(userId, parsed.data.handId),
+        deps.repository.getMistakes(userId)
+      ]);
       const rateLimit = await checkAndIncrementFreeHandLimit(deps.repository, userId, hasUserApiKey);
 
       if (!rateLimit.allowed) {
@@ -64,14 +73,14 @@ export function createCoachingRouter(deps: CoachingRouteDeps): Router {
         ? deps.createMistakeExtractor(claudeClient)
         : new ClaudeMistakeExtractor(claudeClient);
       requestWithPersistence = {
-        ...parsed.data,
+        ...canonicalHand,
         userId,
-        userMistakeProfile: await deps.repository.getMistakes(userId)
+        userMistakeProfile: mistakeProfile
       };
-    } catch (error) {
+    } catch {
       res.status(500).json({
         error: "Coaching setup failed",
-        message: errorMessage(error)
+        message: "Unable to prepare coaching right now."
       });
       return;
     }
@@ -94,10 +103,10 @@ export function createCoachingRouter(deps: CoachingRouteDeps): Router {
         },
         (eventName, event) => writeSse(res, eventName, event)
       );
-    } catch (error) {
+    } catch {
       writeSse(res, "error", {
         type: "error",
-        message: errorMessage(error)
+        message: "Unable to generate coaching right now."
       });
     } finally {
       res.end();
@@ -118,14 +127,4 @@ function flushHeaders(res: Response): void {
   } catch {
     // node-mocks-http exposes Express' flushHeaders method without a real socket behind it.
   }
-}
-
-function errorMessage(error: unknown): string {
-  if (error instanceof ZodError) {
-    return "Invalid model output";
-  }
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return "Unknown coaching error";
 }

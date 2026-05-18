@@ -12,9 +12,14 @@
   },
   "dependencies": {
     "@clerk/nextjs": "latest",
-    "next": "latest",
+    "next": "^16.2.6",
     "react": "latest",
     "react-dom": "latest"
+  },
+  "overrides": {
+    "next": {
+      "postcss": "8.5.10"
+    }
   },
   "devDependencies": {
     "@types/node": "latest",

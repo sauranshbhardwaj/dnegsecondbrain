@@ -40,11 +40,11 @@ export async function POST(request: Request) {
         Connection: "keep-alive"
       }
     });
-  } catch (error) {
+  } catch {
     return Response.json(
       {
         error: "Coaching proxy failed",
-        message: error instanceof Error ? error.message : "Unknown coaching proxy error"
+        message: "Unable to reach coaching right now."
       },
       { status: 502 }
     );

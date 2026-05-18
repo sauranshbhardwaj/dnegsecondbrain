@@ -9,6 +9,7 @@ import {
 } from "./claude/client.js";
 import type { AuthHandlers } from "./auth/clerk.js";
 import { createAuthHandlers } from "./auth/clerk.js";
+import { createPokerEngineHandLoader, type LoadCanonicalHand } from "./coaching/canonical-hand.js";
 import { NoopMistakeExtractor, type MistakeExtractor } from "./coaching/extractor.js";
 import { ClaudeMistakeExtractor } from "./coaching/mistake-extraction.js";
 import { readEnv } from "./config/env.js";
@@ -24,6 +25,7 @@ export type AppDeps = {
   mistakeExtractor?: MistakeExtractor;
   createClaudeClientForUserKey?: (encryptedApiKey: EncryptedApiKey) => ClaudeClient;
   createMistakeExtractor?: (claudeClient: ClaudeClient) => MistakeExtractor;
+  loadCanonicalHand?: LoadCanonicalHand;
   repository?: PersistenceRepository;
   auth?: AuthHandlers;
 };
@@ -38,6 +40,7 @@ export function createApp(deps: AppDeps = {}) {
   const createMistakeExtractor =
     deps.createMistakeExtractor ??
     (deps.mistakeExtractor ? () => deps.mistakeExtractor as MistakeExtractor : defaultMistakeExtractor);
+  const loadCanonicalHand = deps.loadCanonicalHand ?? createPokerEngineHandLoader(env);
   const repository = deps.repository ?? createPersistenceRepository(env);
   const auth = deps.auth ?? createAuthHandlers(env);
 
@@ -61,12 +64,13 @@ export function createApp(deps: AppDeps = {}) {
       claudeClient,
       createClaudeClientForUserKey,
       createMistakeExtractor,
+      loadCanonicalHand,
       repository,
       requireAuth: auth.requireAuth,
       env
     })
   );
-  app.use("/user", createUserApiKeyRouter({ repository, requireAuth: auth.requireAuth, env }));
+  app.use("/user", createUserApiKeyRouter({ loadCanonicalHand, repository, requireAuth: auth.requireAuth, env }));
 
   return app;
 }

@@ -24,12 +24,12 @@ export async function checkAndIncrementFreeHandLimit(
     return { allowed: true, bypassed: true, count: await repository.getFreeHandCount(userId) };
   }
 
-  const current = await repository.getFreeHandCount(userId);
-  if (current >= FREE_HAND_LIMIT) {
+  const claim = await repository.claimFreeHand(userId, FREE_HAND_LIMIT);
+  if (!claim.allowed) {
     return {
       allowed: false,
       status: 402,
-      count: current,
+      count: claim.count,
       message: "Free hand limit reached. Add your Anthropic API key to continue playing unlimited hands."
     };
   }
@@ -37,6 +37,6 @@ export async function checkAndIncrementFreeHandLimit(
   return {
     allowed: true,
     bypassed: false,
-    count: await repository.incrementFreeHandCount(userId)
+    count: claim.count
   };
 }

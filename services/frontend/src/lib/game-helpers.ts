@@ -1,4 +1,4 @@
-import type { CoachingAnalyzePayload, GamePhase, GameState, MistakeProfileEntry, PlayerAction } from "@/lib/game-types";
+import type { GamePhase, GameState, PlayerAction } from "@/lib/game-types";
 
 const ACTIVE_PHASES = new Set<GamePhase>(["PREFLOP", "FLOP", "TURN", "RIVER"]);
 
@@ -60,24 +60,4 @@ export function terminalPotAwarded(state: GameState): number {
 
 export function hasCompleteTerminalContext(state: GameState | null): state is GameState & { terminal: NonNullable<GameState["terminal"]> } {
   return Boolean(state?.terminal && state.terminal.userHand.length === 2 && state.terminal.dnHand.length === 2 && state.terminal.board.length === 5);
-}
-
-export function buildCoachingPayload(state: GameState, mistakes: MistakeProfileEntry[]): CoachingAnalyzePayload {
-  if (!hasCompleteTerminalContext(state)) {
-    throw new Error("Hand is missing terminal coaching context");
-  }
-
-  return {
-    handId: state.handId,
-    userId: state.userId,
-    handHistory: state.handHistory,
-    userHand: state.terminal.userHand,
-    dnHand: state.terminal.dnHand,
-    board: state.terminal.board,
-    winner: state.terminal.winner,
-    pot: terminalPotAwarded(state),
-    userRank: state.terminal.userRank ?? undefined,
-    dnRank: state.terminal.dnRank ?? undefined,
-    userMistakeProfile: mistakes
-  };
 }
