@@ -20,7 +20,13 @@ export function LandingActions({
   return (
     <div className={`${centered ? "text-center" : ""} ${className}`}>
       <Show when="signed-out">
-        <SignUpButton mode="modal" fallbackRedirectUrl="/onboarding" forceRedirectUrl="/onboarding">
+        <SignUpButton
+          mode="modal"
+          fallbackRedirectUrl="/onboarding"
+          forceRedirectUrl="/onboarding"
+          signInFallbackRedirectUrl="/table"
+          signInForceRedirectUrl="/table"
+        >
           <button type="button" className={buttonClassName}>
             Sit Down
           </button>
