@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 const GLOSSARY = {
   "3-bet": "Re-raising before the flop, buddy. Someone raises, you re-raise. It says, “I’m not messing around.”",
@@ -21,6 +21,13 @@ const GLOSSARY = {
 
 const TERMS = Object.keys(GLOSSARY).sort((left, right) => right.length - left.length);
 const TERM_PATTERN = new RegExp(`\\b(${TERMS.map(escapeRegExp).join("|")})\\b`, "gi");
+const TOOLTIP_GUTTER = 16;
+const TOOLTIP_OFFSET = 8;
+
+type TooltipPosition = {
+  left: number;
+  top: number;
+};
 
 export function GlossaryText({ text }: { text: string }) {
   const paragraphs = text.split(/\n+/).filter(Boolean);
@@ -54,25 +61,110 @@ function GlossaryParagraph({ text }: { text: string }) {
 
 function GlossaryTerm({ definition, term }: { definition: string; term: string }) {
   const [open, setOpen] = useState(false);
+  const [tooltipPosition, setTooltipPosition] = useState<TooltipPosition | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const tooltipRef = useRef<HTMLSpanElement | null>(null);
+  const lastPointerType = useRef<string | null>(null);
+  const tooltipId = useId();
+
+  const updateTooltipPosition = useCallback(() => {
+    const button = buttonRef.current;
+    const tooltip = tooltipRef.current;
+    if (!button || !tooltip) {
+      return;
+    }
+
+    const buttonRect = button.getBoundingClientRect();
+    const tooltipRect = tooltip.getBoundingClientRect();
+    const maxLeft = window.innerWidth - tooltipRect.width - TOOLTIP_GUTTER;
+    const centeredLeft = buttonRect.left + buttonRect.width / 2 - tooltipRect.width / 2;
+    const left = clamp(centeredLeft, TOOLTIP_GUTTER, maxLeft);
+    const topAbove = buttonRect.top - tooltipRect.height - TOOLTIP_OFFSET;
+    const topBelow = buttonRect.bottom + TOOLTIP_OFFSET;
+    const maxTop = window.innerHeight - tooltipRect.height - TOOLTIP_GUTTER;
+    const top = topAbove >= TOOLTIP_GUTTER ? topAbove : clamp(topBelow, TOOLTIP_GUTTER, maxTop);
+
+    setTooltipPosition({ left, top });
+  }, []);
+
+  const showTooltip = useCallback(() => {
+    setOpen(true);
+  }, []);
+
+  const hideTooltip = useCallback(() => {
+    setOpen(false);
+    setTooltipPosition(null);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    updateTooltipPosition();
+    const frame = window.requestAnimationFrame(updateTooltipPosition);
+    return () => window.cancelAnimationFrame(frame);
+  }, [open, updateTooltipPosition]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    window.addEventListener("resize", updateTooltipPosition);
+    window.addEventListener("scroll", updateTooltipPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateTooltipPosition);
+      window.removeEventListener("scroll", updateTooltipPosition, true);
+    };
+  }, [open, updateTooltipPosition]);
 
   return (
-    <span className="group relative inline-block">
+    <span className="inline">
       <button
+        ref={buttonRef}
         type="button"
-        onBlur={() => setOpen(false)}
-        onClick={() => setOpen((value) => !value)}
+        aria-describedby={open ? tooltipId : undefined}
+        onBlur={hideTooltip}
+        onClick={() => {
+          if (lastPointerType.current !== "mouse") {
+            showTooltip();
+          }
+        }}
+        onFocus={showTooltip}
+        onPointerDown={(event) => {
+          lastPointerType.current = event.pointerType;
+        }}
+        onPointerEnter={(event) => {
+          lastPointerType.current = event.pointerType;
+          if (event.pointerType === "mouse") {
+            showTooltip();
+          }
+        }}
+        onPointerLeave={(event) => {
+          if (event.pointerType === "mouse") {
+            hideTooltip();
+          }
+        }}
         className="border-b border-dotted border-[color:var(--color-gold)] bg-transparent p-0 text-left text-[color:var(--color-gold)]"
       >
         {term}
       </button>
-      <span
-        role="tooltip"
-        className={`pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 w-max max-w-[240px] -translate-x-1/2 rounded-[var(--radius-md)] border border-[color:var(--color-gold)] bg-[color:var(--color-surface)] px-3 py-2 text-left font-sans text-[13px] leading-5 text-[color:var(--color-text-primary)] shadow-lift transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 ${
-          open ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-        }`}
-      >
-        {definition}
-      </span>
+      {open ? (
+        <span
+          ref={tooltipRef}
+          id={tooltipId}
+          role="tooltip"
+          className="pointer-events-none fixed z-50 w-[min(17.5rem,calc(100vw-2rem))] rounded-[var(--radius-md)] border border-[color:var(--color-gold)] bg-[color:var(--color-surface)] px-3 py-2 text-left font-sans text-[13px] leading-5 text-[color:var(--color-text-primary)] shadow-lift"
+          style={{
+            left: tooltipPosition?.left ?? 0,
+            top: tooltipPosition?.top ?? 0,
+            visibility: tooltipPosition ? "visible" : "hidden"
+          }}
+        >
+          {definition}
+        </span>
+      ) : null}
     </span>
   );
 }
@@ -105,4 +197,8 @@ function splitGlossaryText(text: string): Array<{ text: string; definition?: str
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), Math.max(min, max));
 }
