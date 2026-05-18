@@ -133,6 +133,20 @@ a {
   }
 }
 
+@keyframes negreanu-action-flash {
+  0%,
+  100% {
+    background: rgb(10 10 10 / 0.78);
+    transform: translateX(-50%) scale(1);
+  }
+
+  18%,
+  58% {
+    background: rgb(201 168 76 / 0.16);
+    transform: translateX(-50%) scale(1.018);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

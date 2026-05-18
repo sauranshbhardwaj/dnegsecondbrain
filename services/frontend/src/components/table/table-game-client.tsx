@@ -14,7 +14,6 @@ const BOARD_SLOTS = Array.from({ length: 5 }, (_, index) => index);
 const FREE_HANDS_FALLBACK = 5;
 
 type NegreanuActionNotice = {
-  detail: string;
   key: string;
   text: string;
 };
@@ -376,7 +375,7 @@ export function TableGameClient() {
     negreanuActionTimeout.current = window.setTimeout(() => {
       setIsNegreanuActionFresh(false);
       negreanuActionTimeout.current = null;
-    }, 2200);
+    }, 1000);
   }, [gameState]);
 
   const canAct = isUserTurn(gameState) && !isActing;
@@ -402,9 +401,9 @@ export function TableGameClient() {
   }, [apiKeyInput, loadProfile]);
 
   return (
-    <main className="min-h-svh bg-[color:var(--color-bg)] text-[color:var(--color-text-primary)]">
-      <div className="mx-auto grid min-h-svh w-full max-w-[1500px] gap-6 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1.42fr)_minmax(360px,0.58fr)] lg:px-8">
-        <section className="felt-texture relative min-h-[620px] overflow-hidden rounded-[var(--radius-xl)] border border-[rgb(201_168_76_/_0.16)] shadow-table">
+    <main className="min-h-svh bg-[color:var(--color-bg)] text-[color:var(--color-text-primary)] lg:h-svh lg:overflow-hidden">
+      <div className="mx-auto grid min-h-svh w-full max-w-[1500px] gap-6 px-4 py-5 sm:px-6 lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,1.42fr)_minmax(360px,0.58fr)] lg:items-stretch lg:px-8">
+        <section className="felt-texture relative min-h-[620px] overflow-hidden rounded-[var(--radius-xl)] border border-[rgb(201_168_76_/_0.16)] shadow-table lg:h-full lg:min-h-0">
           <div className="absolute inset-5 rounded-[var(--radius-xl)] border border-dashed border-[rgb(201_168_76_/_0.18)]" aria-hidden="true" />
           <div className="absolute left-1/2 top-8 flex -translate-x-1/2 flex-col items-center gap-3">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-secondary)]">Daniel Negreanu</p>
@@ -414,12 +413,13 @@ export function TableGameClient() {
           {negreanuActionNotice ? (
             <div
               className={`absolute left-1/2 top-[178px] z-10 w-[min(360px,calc(100%-2rem))] -translate-x-1/2 rounded-[var(--radius-md)] border border-[rgb(201_168_76_/_0.3)] bg-[rgb(10_10_10_/_0.78)] px-4 py-3 text-center shadow-lift transition-shadow ${
-                isNegreanuActionFresh ? "shadow-[0_0_0_1px_rgb(201_168_76_/_0.45),0_0_26px_rgb(201_168_76_/_0.2)]" : ""
+                isNegreanuActionFresh
+                  ? "animate-[negreanu-action-flash_1s_ease-out_1] border-[rgb(201_168_76_/_0.7)] shadow-[0_0_0_1px_rgb(201_168_76_/_0.55),0_0_34px_rgb(201_168_76_/_0.28)]"
+                  : ""
               }`}
               aria-live="polite"
             >
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--color-gold)]">{negreanuActionNotice.text}</p>
-              <p className="mt-1 text-xs text-[color:var(--color-text-secondary)]">{negreanuActionNotice.detail}</p>
             </div>
           ) : null}
 
@@ -455,8 +455,8 @@ export function TableGameClient() {
           </div>
         </section>
 
-        <aside className="flex min-h-[620px] flex-col gap-4">
-          <header className="flex items-center justify-between rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-5">
+        <aside className="flex min-h-[620px] flex-col gap-4 lg:h-full lg:min-h-0">
+          <header className="flex shrink-0 items-center justify-between rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-5">
             <div>
               <p className="font-display text-2xl font-semibold text-[color:var(--color-text-primary)]">Heads-up table</p>
               <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">{handCounter}</p>
@@ -476,7 +476,7 @@ export function TableGameClient() {
             </div>
           </header>
 
-          <section className="rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-5">
+          <section className="shrink-0 rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-5">
             <div className="flex items-center justify-between gap-4">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--color-gold)]">Action</p>
               <p className="text-xs text-[color:var(--color-text-muted)]">{gameStatus(gameState, isBooting)}</p>
@@ -547,26 +547,26 @@ export function TableGameClient() {
             ) : null}
           </section>
 
-          <section className="relative flex min-h-[320px] flex-1 flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-5">
-            <div className="flex items-center gap-3">
+          <section className="relative flex min-h-[320px] flex-1 flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-5 lg:min-h-0">
+            <div className="flex shrink-0 items-center gap-3">
               <div className="grid size-9 place-items-center rounded-full bg-[color:var(--color-gold)] text-sm font-semibold text-[color:var(--color-bg)]">N</div>
               <div>
                 <p className="text-sm font-semibold text-[color:var(--color-text-primary)]">Daniel Negreanu</p>
               <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">{coachingStatusLabel(coachingStatus)}</p>
             </div>
           </div>
-          <div className="mt-6 h-px bg-[color:var(--color-border)]" />
+          <div className="mt-6 h-px shrink-0 bg-[color:var(--color-border)]" />
             {pastPatternMatch ? (
-              <div className="mt-6 rounded-[var(--radius-md)] border border-[rgb(139_38_53_/_0.42)] bg-[rgb(139_38_53_/_0.14)] px-4 py-3 text-sm text-[rgb(238_152_164)]">
+              <div className="mt-6 shrink-0 rounded-[var(--radius-md)] border border-[rgb(139_38_53_/_0.42)] bg-[rgb(139_38_53_/_0.14)] px-4 py-3 text-sm text-[rgb(238_152_164)]">
                 Repeated pattern: {pastPatternMatch}
               </div>
             ) : coachingMistake?.exists ? (
-              <div className="mt-6 rounded-[var(--radius-md)] border border-[rgb(201_168_76_/_0.3)] bg-[rgb(201_168_76_/_0.1)] px-4 py-3 text-sm text-[color:var(--color-gold)]">
+              <div className="mt-6 shrink-0 rounded-[var(--radius-md)] border border-[rgb(201_168_76_/_0.3)] bg-[rgb(201_168_76_/_0.1)] px-4 py-3 text-sm text-[color:var(--color-gold)]">
                 New pattern noticed: {coachingMistake.pattern}
               </div>
             ) : null}
             <div
-              className="relative mt-6 min-h-0 flex-1"
+              className="relative mt-6 min-h-0 flex-1 overflow-hidden"
             >
               <div
                 ref={coachingScrollRef}
@@ -677,8 +677,7 @@ function latestNegreanuActionNotice(state: GameState | null): NegreanuActionNoti
     }
 
     return {
-      detail: actionNoticeDetail(entry),
-      key: `${state.handId}:${index}:${entry.action}:${entry.amount ?? ""}:${entry.pot ?? ""}`,
+      key: `${state.handId}:${state.state}:${state.board.length}:${index}:${entry.action}:${entry.amount ?? ""}:${entry.pot ?? ""}`,
       text: formatNegreanuAction(entry)
     };
   }
@@ -701,22 +700,6 @@ function formatNegreanuAction(entry: HandHistoryEntry): string {
   }
 
   return `Daniel Negreanu ${entry.action.replace(/_/g, " ")}`;
-}
-
-function actionNoticeDetail(entry: HandHistoryEntry): string {
-  const street = formatStreet(entry.state);
-  const pot = typeof entry.pot === "number" ? `, pot ${formatChips(entry.pot)}` : "";
-
-  return `${street}${pot}`;
-}
-
-function formatStreet(state?: HandHistoryEntry["state"]): string {
-  if (!state) {
-    return "Table action";
-  }
-
-  const label = String(state).toLowerCase().replace(/_/g, " ");
-  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 function coachingStatusLabel(status: "idle" | "thinking" | "streaming" | "done" | "error" | "rate_limited"): string {
