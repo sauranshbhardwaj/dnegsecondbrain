@@ -1,8 +1,11 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import type { CoachingAnalyzeRequest, MistakeProfileEntry, PromptBundle, WikiArticle } from "./types.js";
 import { loadWikiArticles, selectWikiSlugs } from "./wiki.js";
+
+const API_PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 export async function buildPromptBundle(request: CoachingAnalyzeRequest): Promise<PromptBundle> {
   const repoRoot = await findRepoRoot();
@@ -70,15 +73,36 @@ export function summarizeMistakeProfile(profile: MistakeProfileEntry[]): string 
 }
 
 export async function findRepoRoot(start = process.cwd()): Promise<string> {
+  const candidates = [process.env.COACHING_PROMPT_ROOT, start, API_PACKAGE_ROOT].filter(
+    (candidate): candidate is string => Boolean(candidate)
+  );
+  const searched = new Set<string>();
+
+  for (const candidate of candidates) {
+    const root = await findNearestPromptRoot(candidate, searched);
+    if (root) {
+      return root;
+    }
+  }
+
+  throw new Error("Could not find prompt root containing CLAUDE.md");
+}
+
+async function findNearestPromptRoot(start: string, searched: Set<string>): Promise<string | null> {
   let current = path.resolve(start);
   while (true) {
+    if (searched.has(current)) {
+      return null;
+    }
+    searched.add(current);
+
     try {
       await readFile(path.join(current, "CLAUDE.md"), "utf8");
       return current;
     } catch {
       const parent = path.dirname(current);
       if (parent === current) {
-        throw new Error("Could not find repo root containing CLAUDE.md");
+        return null;
       }
       current = parent;
     }
