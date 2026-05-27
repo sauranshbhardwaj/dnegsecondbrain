@@ -1,6 +1,9 @@
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { buildPromptBundle, buildUserPrompt, summarizeMistakeProfile } from "../src/coaching/prompt.js";
+import { buildPromptBundle, buildUserPrompt, resolvePromptRoot, summarizeMistakeProfile } from "../src/coaching/prompt.js";
 import { handFixtures } from "./fixtures/hands.js";
 
 describe("prompt construction", () => {
@@ -34,5 +37,20 @@ describe("prompt construction", () => {
     expect(bundle.systemPrompt).toContain("Relevant Wiki Context");
     expect(bundle.systemPrompt).toContain("User Mistake Profile");
     expect(bundle.selectedArticles).toHaveLength(3);
+  });
+
+  it("uses the bundled API prompt root when no explicit override is configured", async () => {
+    const promptRoot = await resolvePromptRoot();
+
+    expect(promptRoot.split(path.sep).slice(-2)).toEqual(["services", "api"]);
+  });
+
+  it("does not walk to a parent CLAUDE.md when an explicit prompt root is invalid", async () => {
+    const tempRoot = await mkdtemp(path.join(tmpdir(), "prompt-root-"));
+    const nestedPromptRoot = path.join(tempRoot, "nested");
+    await mkdir(nestedPromptRoot);
+    await writeFile(path.join(tempRoot, "CLAUDE.md"), "# Parent Prompt\nThis must not be used.");
+
+    await expect(resolvePromptRoot(nestedPromptRoot)).rejects.toThrow("Prompt root is missing CLAUDE.md");
   });
 });

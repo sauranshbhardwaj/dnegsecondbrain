@@ -10,7 +10,6 @@ Read these before making product or UI changes:
 
 - `README.md`
 - `DESIGN_BRIEF.md`
-- `CLAUDE.md`
 - `services/api/CLAUDE.md`
 
 ## Operating Rules
