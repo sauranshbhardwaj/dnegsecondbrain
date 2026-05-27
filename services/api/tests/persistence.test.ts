@@ -7,9 +7,9 @@ import { checkAndIncrementFreeHandLimit } from "../src/rate-limit/free-hands.js"
 import { decryptApiKey, encryptApiKey } from "../src/security/api-key-crypto.js";
 import { InMemoryRepository } from "./helpers/in-memory-repository.js";
 
-const encryptionSecret = "day3-test-encryption-secret";
+const encryptionSecret = "persistence-test-encryption-secret";
 
-describe("Day 3 persistence helpers", () => {
+describe("persistence helpers", () => {
   it("builds the exact Upstash key schema", () => {
     expect(sessionKey("user_123")).toBe("session:user_123:current");
     expect(mistakesKey("user_123")).toBe("mistakes:user_123");

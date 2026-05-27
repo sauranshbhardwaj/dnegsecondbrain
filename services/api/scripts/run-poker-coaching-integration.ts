@@ -28,7 +28,7 @@ if (python.status !== 0) {
 const parsedPayload = coachingAnalyzeRequestSchema.parse(JSON.parse(python.stdout));
 const env = readEnv();
 
-if (!env.anthropicApiKey || env.anthropicApiKey === "placeholder") {
+if (!env.anthropicApiKey) {
   console.error("A real ANTHROPIC_API_KEY is required in services/api/.env for integration.");
   process.exit(1);
 }
@@ -47,7 +47,7 @@ for await (const chunk of claude.streamText({
 
 const mistake = await extractor.extract(coaching, parsedPayload);
 
-console.log("# Day 1 + Day 2 Integration");
+console.log("# Poker Engine + Coaching Integration");
 console.log(`Hand ID: ${parsedPayload.userId}`);
 console.log(`User hand: ${parsedPayload.userHand.join(" ")}`);
 console.log(`DN hand: ${parsedPayload.dnHand.join(" ")}`);

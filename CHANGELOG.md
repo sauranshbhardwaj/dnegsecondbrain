@@ -1,23 +1,29 @@
 # Changelog
 
-## 2026-05-01 - Day 1 Poker Engine
+## Initial Production Release
 
-### Added
+### Product
 
-- Created the Daniel Negreanu persona foundation for future Claude coaching, including voice, strategy, mistake memory, teaching style, and authenticity-question handling.
-- Added the first two curated poker knowledge articles: small-ball poker and mental game.
-- Built the Day 1 FastAPI poker engine with in-memory heads-up No-Limit Hold'em sessions.
-- Added deck management, blind posting, betting validation, street advancement, folds, all-ins, and showdown settlement.
-- Added a rule-based DN bot that mixes small-ball value, pot control, pressure bluffs, and river aggression.
-- Added `treys` showdown evaluation for winners, hand ranks, and split pots.
-- Exposed the initial poker API: `/game/new`, `/game/action`, `/game/state`, and `/game/showdown`.
+- Added a heads-up No-Limit Hold'em table against a Daniel Negreanu-inspired opponent.
+- Added post-hand coaching that explains the hand, the user's key decision, and a concrete adjustment.
+- Added persistent mistake memory so repeated patterns can be surfaced in later coaching.
+- Added a five-hand free tier with a user-provided Anthropic API key path for continued play.
+- Added a settings page for API-key management and mistake notes.
+- Added inline glossary support for poker terms in coaching text.
 
-### Verified
+### Platform
 
-- Added automated coverage for deck behavior, betting rules, state progression, all-ins, folds, showdown scoring, split pots, and API errors.
-- Ran the full poker engine test suite: `16 passed`.
-- Played a complete hand over localhost HTTP through the FastAPI service and confirmed the hand completed with showdown scoring and pot award.
+- Added a Next.js frontend, Node/Express API, and Python/FastAPI poker engine.
+- Added Clerk authentication across protected routes.
+- Added Upstash Redis persistence for game state, mistakes, rate limits, and encrypted API keys.
+- Added private Railway networking for the API and poker-engine services.
+- Added production custom domain support at `playwithdanielnegreanu.com`.
 
-### Notes
+### Security
 
-- Day 1 storage is intentionally process-local memory only. Redis, Clerk, Claude API integration, rate limiting, and frontend work remain for later days.
+- Removed public exposure for backend services.
+- Restricted API CORS to the production frontend origin.
+- Stripped deck data from game-state responses.
+- Loaded canonical hand facts server-side for coaching.
+- Hardened client-facing errors to avoid stack traces, file paths, and secret names.
+- Added dependency pinning and audit checks.

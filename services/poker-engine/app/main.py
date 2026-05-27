@@ -1,10 +1,6 @@
 # SECURITY NOTE: This service has no authentication.
 # It must be deployed as a private internal service on Railway,
 # not exposed to the public internet.
-# Post-deployment fix: restrict network access at the
-# infrastructure level so only the Node API and Next.js
-# server can reach this service.
-# Tracked: fix after initial deployment to Railway.
 
 from fastapi import FastAPI, HTTPException, Query
 

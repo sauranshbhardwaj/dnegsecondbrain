@@ -1,6 +1,6 @@
 # API Service
 
-Node/Express API for Claude-powered DN coaching, Clerk auth, and Upstash-backed persistence.
+Node/Express API for Claude-powered DN coaching, Clerk auth, rate limiting, encrypted user API keys, and Upstash-backed persistence.
 
 Run locally:
 
@@ -17,7 +17,7 @@ npm test
 
 Environment:
 
-- `ANTHROPIC_API_KEY`: app-level Anthropic key for Day 2.
+- `ANTHROPIC_API_KEY`: app-level Anthropic key used when the user has not connected their own key.
 - `CLAUDE_MODEL`: defaults to `claude-sonnet-4-20250514`.
 - `CLAUDE_MAX_TOKENS`: defaults to `700`.
 - `CLERK_SECRET_KEY`: Clerk backend secret for verifying protected API requests.
@@ -26,6 +26,8 @@ Environment:
 - `UPSTASH_REDIS_REST_URL`: Upstash Redis REST endpoint.
 - `UPSTASH_REDIS_REST_TOKEN`: Upstash Redis REST token.
 - `API_KEY_ENCRYPTION_SECRET`: at least 16 characters; used to derive the AES-256-GCM key for user Anthropic keys.
+- `FRONTEND_URL`: allowed browser origin for CORS.
+- `POKER_ENGINE_URL`: private Railway URL for the poker-engine service.
 - `PORT`: defaults to `3001`.
 
 Protected routes:

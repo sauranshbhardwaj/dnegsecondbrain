@@ -1,10 +1,10 @@
 # Poker Engine Microservice
 
-Day 1 FastAPI microservice for the Daniel Negreanu Second Brain poker product.
+FastAPI microservice for the Kid Poker Second Brain game engine.
 
 The service owns heads-up No-Limit Hold'em game logic only:
 
-- In-memory sessions keyed by `userId`.
+- Sessions keyed by `userId`.
 - Fixed defaults: 1000 starting stack, 25 small blind, 50 big blind.
 - Rule-based DN bot decisions.
 - `treys` hand evaluation only at showdown.

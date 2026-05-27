@@ -16,7 +16,7 @@ const env: Env = {
   anthropicApiKey: "sk-ant-app-key",
   claudeModel: "claude-haiku-4-5-20251001",
   claudeMaxTokens: 700,
-  apiKeyEncryptionSecret: "day3-route-encryption-secret",
+  apiKeyEncryptionSecret: "protected-route-encryption-secret",
   port: 3001
 };
 
@@ -58,7 +58,7 @@ class CapturingMistakeExtractor implements MistakeExtractor {
   }
 }
 
-describe("Day 3 protected routes", () => {
+describe("protected routes", () => {
   it("returns 401 for coaching without Clerk auth", async () => {
     const response = await invokeApp(
       createApp({
