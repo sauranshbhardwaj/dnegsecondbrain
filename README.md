@@ -6,6 +6,8 @@ Production: https://playwithdanielnegreanu.com
 
 This project is not affiliated with Daniel Negreanu.
 
+<img width="1904" height="828" alt="Kid Poker Second Brain" src="https://github.com/user-attachments/assets/f86ab534-0b5d-42f3-924b-bc20103da2e0" />
+
 ## Product
 
 The product is built around a simple loop:
